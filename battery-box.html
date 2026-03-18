@@ -1,0 +1,1068 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RV Battery Setup — 3D Structure</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;500;700&display=swap");
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: #0a0c10;
+        color: #c8d8e8;
+        font-family: "Rajdhani", sans-serif;
+        overflow: hidden;
+        height: 100vh;
+        width: 100vw;
+      }
+
+      #canvas-container {
+        position: absolute;
+        inset: 0;
+      }
+
+      canvas {
+        display: block;
+      }
+
+      /* HUD overlay */
+      .hud {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+      }
+
+      .title-block {
+        position: absolute;
+        top: 28px;
+        left: 36px;
+        pointer-events: none;
+      }
+      .title-block h1 {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 4px;
+        color: #3af0a0;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+      .title-block h2 {
+        font-size: 28px;
+        font-weight: 700;
+        color: #e8f4ff;
+        letter-spacing: 2px;
+        line-height: 1.1;
+      }
+      .title-block .sub {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 10px;
+        color: #5a8a7a;
+        margin-top: 6px;
+        letter-spacing: 2px;
+      }
+
+      /* Legend */
+      .legend {
+        position: absolute;
+        bottom: 32px;
+        left: 36px;
+        pointer-events: none;
+      }
+      .legend-title {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 3px;
+        color: #3af0a0;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 7px;
+      }
+      .swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        flex-shrink: 0;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .legend-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #c8d8e8;
+        letter-spacing: 1px;
+      }
+      .legend-sub {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        color: #4a7a6a;
+        margin-left: 24px;
+        margin-top: -4px;
+        margin-bottom: 3px;
+      }
+
+      /* Controls hint */
+      .controls-hint {
+        position: absolute;
+        bottom: 32px;
+        right: 36px;
+        text-align: right;
+        pointer-events: none;
+      }
+      .controls-hint p {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        color: #3a5a50;
+        letter-spacing: 2px;
+        line-height: 1.9;
+      }
+      .controls-hint span {
+        color: #3af0a0;
+      }
+
+      /* Stats panel */
+      .stats-panel {
+        position: absolute;
+        top: 28px;
+        right: 36px;
+        pointer-events: none;
+        text-align: right;
+      }
+      .stats-panel .stat-row {
+        margin-bottom: 8px;
+      }
+      .stats-panel .stat-label {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        color: #3a5a50;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+      }
+      .stats-panel .stat-value {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 16px;
+        color: #3af0a0;
+        letter-spacing: 1px;
+      }
+
+      /* Scanline overlay */
+      .scanlines {
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          to bottom,
+          transparent 0px,
+          transparent 3px,
+          rgba(0, 0, 0, 0.04) 3px,
+          rgba(0, 0, 0, 0.04) 4px
+        );
+        pointer-events: none;
+      }
+
+      /* Corner decorations */
+      .corner {
+        position: absolute;
+        width: 32px;
+        height: 32px;
+      }
+      .corner.tl {
+        top: 16px;
+        left: 16px;
+        border-top: 1px solid #3af0a040;
+        border-left: 1px solid #3af0a040;
+      }
+      .corner.tr {
+        top: 16px;
+        right: 16px;
+        border-top: 1px solid #3af0a040;
+        border-right: 1px solid #3af0a040;
+      }
+      .corner.bl {
+        bottom: 16px;
+        left: 16px;
+        border-bottom: 1px solid #3af0a040;
+        border-left: 1px solid #3af0a040;
+      }
+      .corner.br {
+        bottom: 16px;
+        right: 16px;
+        border-bottom: 1px solid #3af0a040;
+        border-right: 1px solid #3af0a040;
+      }
+
+      /* Label tooltip */
+      #tooltip {
+        position: absolute;
+        background: rgba(10, 12, 16, 0.92);
+        border: 1px solid #3af0a050;
+        border-radius: 4px;
+        padding: 8px 12px;
+        pointer-events: none;
+        display: none;
+        max-width: 200px;
+      }
+      #tooltip .tt-name {
+        font-size: 13px;
+        font-weight: 700;
+        color: #e8f4ff;
+        letter-spacing: 1px;
+      }
+      #tooltip .tt-mat {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        color: #3af0a0;
+        letter-spacing: 2px;
+        margin-top: 3px;
+      }
+      #tooltip .tt-desc {
+        font-size: 11px;
+        color: #7a9a9a;
+        margin-top: 4px;
+        line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="canvas-container"></div>
+
+    <div class="hud">
+      <div class="scanlines"></div>
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+
+      <div class="title-block">
+        <h1>RV Power Systems</h1>
+        <h2>BATTERY BOX<br />STRUCTURE</h2>
+        <div class="sub">// 3D COMPONENT MAP · DRAG TO ROTATE</div>
+      </div>
+
+      <div class="stats-panel">
+        <div class="stat-row">
+          <div class="stat-label">System Voltage</div>
+          <div class="stat-value">12V / 24V</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">Battery Type</div>
+          <div class="stat-value">LiFePO₄</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">Components</div>
+          <div class="stat-value">7 PARTS</div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="legend-title">// Materials</div>
+        <div class="legend-item">
+          <div class="swatch" style="background: #8b6914"></div>
+          <div class="legend-label">Wood Frame</div>
+        </div>
+        <div class="legend-sub">Edge-beam cube + top retention beam</div>
+        <div class="legend-item">
+          <div class="swatch" style="background: #e8e0d0"></div>
+          <div class="legend-label">Foam</div>
+        </div>
+        <div class="legend-sub">Bottom fill + 2× top buffer pads</div>
+        <div class="legend-item">
+          <div class="swatch" style="background: #2a7adf"></div>
+          <div class="legend-label">Lithium Batteries</div>
+        </div>
+        <div class="legend-sub">x2 LiFePO₄ cells (parallel)</div>
+        <div class="legend-item">
+          <div
+            class="swatch"
+            style="background: #cc2200; border-color: #ff4422"
+          ></div>
+          <div class="legend-label">Positive Cable</div>
+        </div>
+        <div class="legend-item">
+          <div
+            class="swatch"
+            style="background: #111; border-color: #444"
+          ></div>
+          <div class="legend-label">Negative Cable</div>
+        </div>
+      </div>
+
+      <div class="controls-hint">
+        <p><span>DRAG</span> — Rotate</p>
+        <p><span>SCROLL</span> — Zoom</p>
+        <p><span>HOVER</span> — Inspect</p>
+      </div>
+    </div>
+
+    <div id="tooltip">
+      <div class="tt-name" id="tt-name"></div>
+      <div class="tt-mat" id="tt-mat"></div>
+      <div class="tt-desc" id="tt-desc"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+      // ─── Scene Setup ───────────────────────────────────────────────────────────
+      const W = window.innerWidth,
+        H = window.innerHeight;
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true
+      });
+      renderer.setSize(W, H);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      document
+        .getElementById("canvas-container")
+        .appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0c10);
+      scene.fog = new THREE.Fog(0x0a0c10, 18, 35);
+
+      const camera = new THREE.PerspectiveCamera(42, W / H, 0.1, 100);
+      camera.position.set(5.5, 4.5, 7);
+      camera.lookAt(0, 0.5, 0);
+
+      // ─── Lights ────────────────────────────────────────────────────────────────
+      const ambient = new THREE.AmbientLight(0x102030, 0.6);
+      scene.add(ambient);
+
+      const keyLight = new THREE.DirectionalLight(0x80c8ff, 1.2);
+      keyLight.position.set(5, 8, 5);
+      keyLight.castShadow = true;
+      keyLight.shadow.mapSize.width = 2048;
+      keyLight.shadow.mapSize.height = 2048;
+      scene.add(keyLight);
+
+      const fillLight = new THREE.DirectionalLight(0x3af0a0, 0.35);
+      fillLight.position.set(-4, 3, -3);
+      scene.add(fillLight);
+
+      const rimLight = new THREE.DirectionalLight(0x2050ff, 0.25);
+      rimLight.position.set(0, -2, -6);
+      scene.add(rimLight);
+
+      // ─── Grid floor ────────────────────────────────────────────────────────────
+      const gridHelper = new THREE.GridHelper(20, 20, 0x1a3a2a, 0x111820);
+      gridHelper.position.y = -1.51;
+      scene.add(gridHelper);
+
+      // ─── Materials ─────────────────────────────────────────────────────────────
+      function mat(
+        color,
+        rough = 0.7,
+        metal = 0.05,
+        opacity = 1,
+        transparent = false
+      ) {
+        return new THREE.MeshStandardMaterial({
+          color,
+          roughness: rough,
+          metalness: metal,
+          transparent,
+          opacity
+        });
+      }
+
+      const woodMat = mat(0x8b6914, 0.85, 0.0);
+      const foamMat = mat(0xe8e0d0, 0.95, 0.0, 0.8, true);
+      const battMat = mat(0x1a3a6a, 0.35, 0.5);
+      const battAccent = mat(0x2a7adf, 0.3, 0.6);
+      const posWireMat = mat(0xcc2200, 0.4, 0.3);
+      const negWireMat = mat(0x111111, 0.5, 0.2);
+
+      const termMat = mat(0xddaa30, 0.2, 0.9);
+
+      // ─── Helpers ───────────────────────────────────────────────────────────────
+      const interactables = [];
+
+      function box(w, h, d, mat, x, y, z, name, material, desc) {
+        const geo = new THREE.BoxGeometry(w, h, d);
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+        if (name) interactables.push({ mesh, name, material, desc });
+        return mesh;
+      }
+
+      function cylinder(
+        rt,
+        rb,
+        h,
+        segs,
+        mat,
+        x,
+        y,
+        z,
+        rx = 0,
+        ry = 0,
+        rz = 0,
+        name,
+        material,
+        desc
+      ) {
+        const geo = new THREE.CylinderGeometry(rt, rb, h, segs);
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, z);
+        mesh.rotation.set(rx, ry, rz);
+        mesh.castShadow = true;
+        scene.add(mesh);
+        if (name) interactables.push({ mesh, name, material, desc });
+        return mesh;
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // LAYOUT CONSTANTS — derived bottom-up so foam bottom = battery top
+      // ═══════════════════════════════════════════════════════════════════
+      const BX = 2.2,
+        BY_BOT = -1.5,
+        BZ = 1.2,
+        BT = 0.13;
+
+      // Build stack upward from BY_BOT
+      const _foamBotCenter = BY_BOT + BT + 0.1;
+      const _battBotY = _foamBotCenter + 0.1 + 0.55;
+      const _battTopY_ = _battBotY + 0.55;
+      const _topFoamH = 0.14;
+      const _retBeamH = 0.18;
+      // foam bottom must touch battery top exactly
+      const _topFoamCenter = _battTopY_ + _topFoamH / 2;
+      const _retBeamCenter = _topFoamCenter + _topFoamH / 2 + _retBeamH / 2;
+      const BY_TOP = _retBeamCenter + _retBeamH / 2 + BT;
+
+      const FX = BX * 2 - BT * 2;
+      const FZ = BZ * 2 - BT * 2;
+
+      // ─── HOLLOW CUBE EDGE FRAME (12 beams) ──────────────────────────────
+      // Helper: edge beam
+      function beam(w, h, d, x, y, z, name, desc) {
+        return box(
+          w,
+          h,
+          d,
+          woodMat,
+          x,
+          y,
+          z,
+          name || null,
+          name ? "Wood (2×4 lumber)" : null,
+          desc || null
+        );
+      }
+
+      const frameH = BY_TOP - BY_BOT; // 2.4  (vertical height)
+      const frameW = BX * 2; // 4.4  (left-right span)
+      const frameD = BZ * 2; // 2.4  (front-back span)
+
+      // 4 vertical corner posts
+      beam(
+        BT,
+        frameH,
+        BT,
+        -BX + BT / 2,
+        (BY_BOT + BY_TOP) / 2,
+        BZ - BT / 2,
+        "Corner Post (FL)",
+        "Front-left vertical corner post"
+      );
+      beam(
+        BT,
+        frameH,
+        BT,
+        BX - BT / 2,
+        (BY_BOT + BY_TOP) / 2,
+        BZ - BT / 2,
+        "Corner Post (FR)",
+        "Front-right vertical corner post"
+      );
+      beam(
+        BT,
+        frameH,
+        BT,
+        -BX + BT / 2,
+        (BY_BOT + BY_TOP) / 2,
+        -BZ + BT / 2,
+        "Corner Post (BL)",
+        "Back-left vertical corner post"
+      );
+      beam(
+        BT,
+        frameH,
+        BT,
+        BX - BT / 2,
+        (BY_BOT + BY_TOP) / 2,
+        -BZ + BT / 2,
+        "Corner Post (BR)",
+        "Back-right vertical corner post"
+      );
+
+      // 4 bottom horizontal rails
+      beam(
+        frameW,
+        BT,
+        BT,
+        0,
+        BY_BOT + BT / 2,
+        BZ - BT / 2,
+        "Bottom Rail (Front)",
+        "Bottom front horizontal rail"
+      );
+      beam(
+        frameW,
+        BT,
+        BT,
+        0,
+        BY_BOT + BT / 2,
+        -BZ + BT / 2,
+        "Bottom Rail (Back)",
+        "Bottom back horizontal rail"
+      );
+      beam(
+        BT,
+        BT,
+        frameD,
+        -BX + BT / 2,
+        BY_BOT + BT / 2,
+        0,
+        "Bottom Rail (Left)",
+        "Bottom left horizontal rail"
+      );
+      beam(
+        BT,
+        BT,
+        frameD,
+        BX - BT / 2,
+        BY_BOT + BT / 2,
+        0,
+        "Bottom Rail (Right)",
+        "Bottom right horizontal rail"
+      );
+
+      // 4 top horizontal rails
+      beam(
+        frameW,
+        BT,
+        BT,
+        0,
+        BY_TOP - BT / 2,
+        BZ - BT / 2,
+        "Top Rail (Front)",
+        "Top front horizontal rail"
+      );
+      beam(
+        frameW,
+        BT,
+        BT,
+        0,
+        BY_TOP - BT / 2,
+        -BZ + BT / 2,
+        "Top Rail (Back)",
+        "Top back horizontal rail"
+      );
+      beam(
+        BT,
+        BT,
+        frameD,
+        -BX + BT / 2,
+        BY_TOP - BT / 2,
+        0,
+        "Top Rail (Left)",
+        "Top left horizontal rail"
+      );
+      beam(
+        BT,
+        BT,
+        frameD,
+        BX - BT / 2,
+        BY_TOP - BT / 2,
+        0,
+        "Top Rail (Right)",
+        "Top right horizontal rail"
+      );
+
+      // ─── BOTTOM FOAM (fills interior floor exactly) ─────────────────────
+      const foamBotY = _foamBotCenter;
+      box(
+        FX,
+        0.2,
+        FZ,
+        foamMat,
+        0,
+        foamBotY,
+        0,
+        "Bottom Foam Pad",
+        "EVA Foam",
+        "Closed-cell foam cut precisely to fit the inner floor of the wood frame. Vibration isolation layer under both batteries."
+      );
+
+      // ─── BATTERIES ──────────────────────────────────────────────────────
+      const battW = 1.55,
+        battH = 1.1,
+        battD = 1.9;
+      const battY = _battBotY;
+      const battTopY = _battTopY_;
+
+      const b1x = -(battW / 2 + 0.03);
+      const b2x = battW / 2 + 0.03;
+
+      box(
+        battW,
+        battH,
+        battD,
+        battMat,
+        b1x,
+        battY,
+        0,
+        "Battery #1",
+        "LiFePO₄ Lithium",
+        "100Ah 12V LiFePO₄ cell – left. Wired in parallel with Battery #2."
+      );
+      box(
+        battW + 0.01,
+        0.2,
+        battD + 0.01,
+        battAccent,
+        b1x,
+        battY + 0.28,
+        0,
+        null,
+        null,
+        null
+      );
+
+      box(
+        battW,
+        battH,
+        battD,
+        battMat,
+        b2x,
+        battY,
+        0,
+        "Battery #2",
+        "LiFePO₄ Lithium",
+        "100Ah 12V LiFePO₄ cell – right. Wired in parallel with Battery #1."
+      );
+      box(
+        battW + 0.01,
+        0.2,
+        battD + 0.01,
+        battAccent,
+        b2x,
+        battY + 0.28,
+        0,
+        null,
+        null,
+        null
+      );
+
+      // ─── TERMINALS ──────────────────────────────────────────────────────
+      // Terminals sit at front quarter of the battery top (Z = -BZ*0.5, toward front)
+      const termZ = -BZ * 0.5; // 1/4 position along depth (front side)
+      const termY = battTopY + 0.09;
+      const tOff = 0.38;
+
+      cylinder(
+        0.065,
+        0.065,
+        0.18,
+        10,
+        termMat,
+        b1x - tOff,
+        termY,
+        termZ,
+        0,
+        0,
+        0,
+        "Terminal (+) Bat1",
+        "Brass/Copper",
+        "Positive terminal — Battery #1. Output (+) lead exits here."
+      );
+      cylinder(
+        0.065,
+        0.065,
+        0.18,
+        10,
+        termMat,
+        b1x + tOff,
+        termY,
+        termZ,
+        0,
+        0,
+        0,
+        "Terminal (−) Bat1",
+        "Brass/Copper",
+        "Negative terminal — Battery #1. Bus cable to Bat2 (−)."
+      );
+      cylinder(
+        0.065,
+        0.065,
+        0.18,
+        10,
+        termMat,
+        b2x - tOff,
+        termY,
+        termZ,
+        0,
+        0,
+        0,
+        "Terminal (+) Bat2",
+        "Brass/Copper",
+        "Positive terminal — Battery #2. Bus cable to Bat1 (+)."
+      );
+      cylinder(
+        0.065,
+        0.065,
+        0.18,
+        10,
+        termMat,
+        b2x + tOff,
+        termY,
+        termZ,
+        0,
+        0,
+        0,
+        "Terminal (−) Bat2",
+        "Brass/Copper",
+        "Negative terminal — Battery #2. Output (−) lead exits here."
+      );
+
+      // ─── TOP FOAM BUFFER PADS ───────────────────────────────────────────
+      // Beam sits at rear 3/4 position (Z = +BZ*0.5), foam pads centered under beam
+      const beamZ = +BZ * 0.5; // 3/4 position along depth (rear side)
+      const topFoamH = _topFoamH;
+      const topFoamY = _topFoamCenter;
+      const retBeamD = 0.38;
+      box(
+        retBeamD - 0.02,
+        topFoamH,
+        retBeamD - 0.02,
+        foamMat,
+        b1x,
+        topFoamY,
+        beamZ,
+        "Top Foam Buffer #1",
+        "EVA Foam",
+        "Foam pad under beam at rear 3/4 position. Bottom face sits exactly on Battery #1 top."
+      );
+      box(
+        retBeamD - 0.02,
+        topFoamH,
+        retBeamD - 0.02,
+        foamMat,
+        b2x,
+        topFoamY,
+        beamZ,
+        "Top Foam Buffer #2",
+        "EVA Foam",
+        "Foam pad under beam at rear 3/4 position. Bottom face sits exactly on Battery #2 top."
+      );
+
+      // ─── TOP RETENTION BEAM ─────────────────────────────────────────────
+      const retBeamW = FX;
+      const retBeamH = _retBeamH;
+      const retBeamY = _retBeamCenter;
+      box(
+        retBeamW,
+        retBeamH,
+        retBeamD,
+        woodMat,
+        0,
+        retBeamY,
+        beamZ,
+        "Top Retention Beam",
+        "Wood (2×4 lumber)",
+        "Single 2×4 at rear 3/4 depth, fixed to left/right top rails. Separated from terminals (front 1/4) for clear access. Presses foam pads onto battery tops."
+      );
+
+      // Connector blocks where beam meets left/right top rails
+      box(
+        BT + 0.04,
+        0.12,
+        retBeamD + 0.04,
+        woodMat,
+        -BX + BT / 2,
+        BY_TOP - BT / 2 - 0.02,
+        beamZ,
+        null,
+        null,
+        null
+      );
+      box(
+        BT + 0.04,
+        0.12,
+        retBeamD + 0.04,
+        woodMat,
+        BX - BT / 2,
+        BY_TOP - BT / 2 - 0.02,
+        beamZ,
+        null,
+        null,
+        null
+      );
+
+      // ─── CABLES ─────────────────────────────────────────────────────────
+      function makeCable(
+        points,
+        material,
+        name,
+        mat_label,
+        desc,
+        radius = 0.045
+      ) {
+        const curve = new THREE.CatmullRomCurve3(points);
+        const geo = new THREE.TubeGeometry(curve, 28, radius, 8, false);
+        const mesh = new THREE.Mesh(geo, material);
+        mesh.castShadow = true;
+        scene.add(mesh);
+        if (name) interactables.push({ mesh, name, material: mat_label, desc });
+        return mesh;
+      }
+
+      const cArcY = termY + 0.22;
+      const leftWallX = -(BX + 0.04);
+      const rightWallX = BX + 0.04;
+
+      // ── Bus cable: Bat1(+) → Bat2(+)  [red, arcs between terminals] ─────
+      makeCable(
+        [
+          new THREE.Vector3(b1x - tOff, termY + 0.09, termZ),
+          new THREE.Vector3(b1x - tOff, cArcY, termZ - 0.05),
+          new THREE.Vector3(0.0, cArcY + 0.08, termZ - 0.08),
+          new THREE.Vector3(b2x - tOff, cArcY, termZ - 0.05),
+          new THREE.Vector3(b2x - tOff, termY + 0.09, termZ)
+        ],
+        posWireMat,
+        "Positive Bus Cable",
+        "2 AWG Red",
+        "Connects Bat1(+) → Bat2(+). Parallel bank positive link."
+      );
+
+      // ── Bus cable: Bat1(−) → Bat2(−)  [black, arcs slightly higher] ─────
+      makeCable(
+        [
+          new THREE.Vector3(b1x + tOff, termY + 0.09, termZ),
+          new THREE.Vector3(b1x + tOff, cArcY + 0.12, termZ - 0.05),
+          new THREE.Vector3(0.0, cArcY + 0.2, termZ - 0.08),
+          new THREE.Vector3(b2x + tOff, cArcY + 0.12, termZ - 0.05),
+          new THREE.Vector3(b2x + tOff, termY + 0.09, termZ)
+        ],
+        negWireMat,
+        "Negative Bus Cable",
+        "2 AWG Black",
+        "Connects Bat1(−) → Bat2(−). Parallel bank negative link."
+      );
+
+      // ── Output (+): straight from Bat1(+) terminal → left side wall exit ─
+      makeCable(
+        [
+          new THREE.Vector3(b1x - tOff, termY + 0.09, termZ),
+          new THREE.Vector3(b1x - tOff - 0.15, termY + 0.09, termZ),
+          new THREE.Vector3(b1x - tOff - 0.5, termY + 0.05, termZ),
+          new THREE.Vector3(leftWallX, termY + 0.05, termZ),
+          new THREE.Vector3(leftWallX - 0.45, termY + 0.05, termZ)
+        ],
+        posWireMat,
+        "Output (+) Lead",
+        "4 AWG Red",
+        "Positive output — starts at Bat1(+) terminal, runs horizontally to left side wall and exits."
+      );
+
+      // ── Output (−): straight from Bat2(−) terminal → right side wall exit ─
+      makeCable(
+        [
+          new THREE.Vector3(b2x + tOff, termY + 0.09, termZ),
+          new THREE.Vector3(b2x + tOff + 0.15, termY + 0.09, termZ),
+          new THREE.Vector3(b2x + tOff + 0.5, termY + 0.05, termZ),
+          new THREE.Vector3(rightWallX, termY + 0.05, termZ),
+          new THREE.Vector3(rightWallX + 0.45, termY + 0.05, termZ)
+        ],
+        negWireMat,
+        "Output (−) Lead",
+        "4 AWG Black",
+        "Negative output — starts at Bat2(−) terminal, runs horizontally to right side wall and exits."
+      );
+
+      // ─── Interaction / Raycasting ───────────────────────────────────────────────
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      const tooltip = document.getElementById("tooltip");
+
+      function getMeshes() {
+        return interactables.map((i) => i.mesh);
+      }
+
+      window.addEventListener("mousemove", (e) => {
+        mouse.x = (e.clientX / W) * 2 - 1;
+        mouse.y = -(e.clientY / H) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObjects(getMeshes());
+        if (hits.length > 0) {
+          const found = interactables.find((i) => i.mesh === hits[0].object);
+          if (found) {
+            document.getElementById("tt-name").textContent = found.name;
+            document.getElementById("tt-mat").textContent =
+              "// " + found.material;
+            document.getElementById("tt-desc").textContent = found.desc;
+            tooltip.style.display = "block";
+            tooltip.style.left = e.clientX + 16 + "px";
+            tooltip.style.top = e.clientY - 10 + "px";
+            return;
+          }
+        }
+        tooltip.style.display = "none";
+      });
+
+      // ─── Orbit controls (manual) ────────────────────────────────────────────────
+      let isDragging = false,
+        prevX = 0,
+        prevY = 0;
+      let spherical = { theta: 0.6, phi: 0.85, r: 10.5 };
+
+      function updateCamera() {
+        camera.position.x =
+          spherical.r * Math.sin(spherical.phi) * Math.sin(spherical.theta);
+        camera.position.y = spherical.r * Math.cos(spherical.phi);
+        camera.position.z =
+          spherical.r * Math.sin(spherical.phi) * Math.cos(spherical.theta);
+        camera.lookAt(0, 0.2, 0);
+      }
+      updateCamera();
+
+      renderer.domElement.addEventListener("mousedown", (e) => {
+        isDragging = true;
+        prevX = e.clientX;
+        prevY = e.clientY;
+      });
+      window.addEventListener("mouseup", () => (isDragging = false));
+      window.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        const dx = (e.clientX - prevX) * 0.008,
+          dy = (e.clientY - prevY) * 0.008;
+        spherical.theta -= dx;
+        spherical.phi = Math.max(
+          0.2,
+          Math.min(Math.PI * 0.75, spherical.phi + dy)
+        );
+        prevX = e.clientX;
+        prevY = e.clientY;
+        updateCamera();
+      });
+      window.addEventListener(
+        "wheel",
+        (e) => {
+          spherical.r = Math.max(
+            4,
+            Math.min(18, spherical.r + e.deltaY * 0.015)
+          );
+          updateCamera();
+        },
+        { passive: true }
+      );
+
+      // Touch support
+      let lastTouchX = 0,
+        lastTouchY = 0,
+        lastPinchDist = 0;
+      renderer.domElement.addEventListener(
+        "touchstart",
+        (e) => {
+          if (e.touches.length === 1) {
+            lastTouchX = e.touches[0].clientX;
+            lastTouchY = e.touches[0].clientY;
+          }
+          if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            lastPinchDist = Math.sqrt(dx * dx + dy * dy);
+          }
+        },
+        { passive: true }
+      );
+      renderer.domElement.addEventListener(
+        "touchmove",
+        (e) => {
+          if (e.touches.length === 1) {
+            const dx = (e.touches[0].clientX - lastTouchX) * 0.01;
+            const dy = (e.touches[0].clientY - lastTouchY) * 0.01;
+            spherical.theta -= dx;
+            spherical.phi = Math.max(
+              0.2,
+              Math.min(Math.PI * 0.75, spherical.phi + dy)
+            );
+            lastTouchX = e.touches[0].clientX;
+            lastTouchY = e.touches[0].clientY;
+            updateCamera();
+          }
+          if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            spherical.r = Math.max(
+              4,
+              Math.min(18, spherical.r - (dist - lastPinchDist) * 0.03)
+            );
+            lastPinchDist = dist;
+            updateCamera();
+          }
+        },
+        { passive: true }
+      );
+
+      // ─── Resize ─────────────────────────────────────────────────────────────────
+      window.addEventListener("resize", () => {
+        const w = window.innerWidth,
+          h = window.innerHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      });
+
+      // ─── Auto-rotate ────────────────────────────────────────────────────────────
+      let autoRotate = true;
+      renderer.domElement.addEventListener(
+        "mousedown",
+        () => (autoRotate = false)
+      );
+      renderer.domElement.addEventListener(
+        "touchstart",
+        () => (autoRotate = false),
+        { passive: true }
+      );
+
+      // ─── Render loop ────────────────────────────────────────────────────────────
+      const clock = new THREE.Clock();
+      function animate() {
+        requestAnimationFrame(animate);
+        const t = clock.getElapsedTime();
+        if (autoRotate) {
+          spherical.theta = 0.6 + t * 0.18;
+          updateCamera();
+        }
+        // Subtle cable pulse via emissive
+        posWireMat.emissive = new THREE.Color(0.18, 0.01, 0.01);
+        posWireMat.emissiveIntensity = 0.5 + 0.35 * Math.sin(t * 2.0);
+        negWireMat.emissive = new THREE.Color(0.02, 0.02, 0.06);
+        negWireMat.emissiveIntensity = 0.2;
+        battAccent.emissive = new THREE.Color(0.02, 0.06, 0.22);
+        battAccent.emissiveIntensity = 0.3 + 0.2 * Math.sin(t * 0.8);
+        renderer.render(scene, camera);
+      }
+      animate();
+    </script>
+  </body>
+</html>
