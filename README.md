@@ -54,6 +54,7 @@ open battery-box.html
 - Vanilla HTML/CSS/JS — zero build tooling
 - Google Fonts: Share Tech Mono, Rajdhani
 
+
 ## License
 
 See [LICENSE](LICENSE).
