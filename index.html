@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RV Diagrams</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;500;700&display=swap");
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: #0a0c10;
+        color: #c8d8e8;
+        font-family: "Rajdhani", sans-serif;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Scanlines */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: repeating-linear-gradient(
+          to bottom,
+          transparent 0px,
+          transparent 3px,
+          rgba(0, 0, 0, 0.04) 3px,
+          rgba(0, 0, 0, 0.04) 4px
+        );
+        pointer-events: none;
+        z-index: 100;
+      }
+
+      header {
+        padding: 48px 48px 32px;
+        border-bottom: 1px solid #1a2a20;
+      }
+
+      header .eyebrow {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 4px;
+        color: #3af0a0;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+      }
+
+      header h1 {
+        font-size: 36px;
+        font-weight: 700;
+        color: #e8f4ff;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+      }
+
+      header p {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 11px;
+        color: #4a6a5a;
+        letter-spacing: 2px;
+        margin-top: 10px;
+      }
+
+      main {
+        padding: 48px;
+        flex: 1;
+      }
+
+      .section-title {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 4px;
+        color: #3a5a50;
+        text-transform: uppercase;
+        margin-bottom: 24px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+      }
+
+      .card {
+        display: block;
+        text-decoration: none;
+        border: 1px solid #1a2a20;
+        border-radius: 6px;
+        padding: 24px;
+        background: #0d1117;
+        transition: border-color 0.2s, background 0.2s;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, #3af0a0, #2a7adf);
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+
+      .card:hover {
+        border-color: #2a4a38;
+        background: #0f1520;
+      }
+
+      .card:hover::before {
+        opacity: 1;
+      }
+
+      .card-tag {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 3px;
+        color: #3af0a0;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+      }
+
+      .card-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #e8f4ff;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+      }
+
+      .card-desc {
+        font-size: 13px;
+        color: #6a8a80;
+        line-height: 1.5;
+        margin-bottom: 16px;
+      }
+
+      .card-meta {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .badge {
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 1px;
+        color: #3a5a50;
+        background: #0a1410;
+        border: 1px solid #1a3020;
+        border-radius: 3px;
+        padding: 3px 7px;
+      }
+
+      .card-arrow {
+        position: absolute;
+        bottom: 24px;
+        right: 24px;
+        font-family: "Share Tech Mono", monospace;
+        font-size: 14px;
+        color: #1a3a2a;
+        transition: color 0.2s;
+      }
+
+      .card:hover .card-arrow {
+        color: #3af0a0;
+      }
+
+      footer {
+        padding: 24px 48px;
+        border-top: 1px solid #1a2a20;
+        font-family: "Share Tech Mono", monospace;
+        font-size: 9px;
+        color: #2a3a30;
+        letter-spacing: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="eyebrow">// RV Power Systems</div>
+      <h1>RV Diagrams</h1>
+      <p>Interactive 3D component maps — open in any browser, no install required</p>
+    </header>
+
+    <main>
+      <div class="section-title">// Diagrams</div>
+      <div class="grid">
+
+        <a class="card" href="battery-box.html">
+          <div class="card-tag">// Power · Storage</div>
+          <div class="card-title">Battery Box Structure</div>
+          <div class="card-desc">
+            3D exploded view of the dual LiFePO4 battery bank — wood frame,
+            foam padding, terminals, bus cables, and output leads.
+          </div>
+          <div class="card-meta">
+            <span class="badge">12V / 24V</span>
+            <span class="badge">LiFePO4</span>
+            <span class="badge">2x 100Ah</span>
+            <span class="badge">Parallel</span>
+          </div>
+          <div class="card-arrow">&#8594;</div>
+        </a>
+
+      </div>
+    </main>
+
+    <footer>// rv-diagrams &mdash; drag to rotate &middot; scroll to zoom &middot; hover to inspect</footer>
+  </body>
+</html>
