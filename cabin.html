@@ -392,42 +392,56 @@
       // Outdoor environment (sky, tree line, gravel) so the aluminium reflects a scene the
       // way the real shell does. Only used for reflections — the page background stays dark.
       (function buildEnvironment() {
+        // Drawn at 2048×1024 so mirror-like aluminium shows crisp reflections.
+        const W = 2048, H = 1024, HZ = H / 2;
         const c = document.createElement("canvas");
-        c.width = 1024;
-        c.height = 512;
+        c.width = W;
+        c.height = H;
         const g = c.getContext("2d");
         const rnd = seeded(41);
-        const sky = g.createLinearGradient(0, 0, 0, 256);
-        sky.addColorStop(0, "#5f8fcc");
-        sky.addColorStop(1, "#e4ecf2");
+        const sky = g.createLinearGradient(0, 0, 0, HZ);
+        sky.addColorStop(0, "#5a8dd0");
+        sky.addColorStop(0.7, "#bcd3ea");
+        sky.addColorStop(1, "#eef3f6");
         g.fillStyle = sky;
-        g.fillRect(0, 0, 1024, 256);
-        for (let i = 0; i < 14; i++) {
-          g.fillStyle = `rgba(255,255,255,${0.25 + rnd() * 0.35})`;
+        g.fillRect(0, 0, W, HZ);
+        for (let i = 0; i < 26; i++) {
+          g.fillStyle = `rgba(255,255,255,${0.35 + rnd() * 0.4})`;
           g.beginPath();
-          g.ellipse(rnd() * 1024, 40 + rnd() * 140, 40 + rnd() * 90, 10 + rnd() * 18, 0, 0, Math.PI * 2);
+          g.ellipse(rnd() * W, 60 + rnd() * 300, 60 + rnd() * 180, 14 + rnd() * 30, 0, 0, Math.PI * 2);
           g.fill();
         }
-        const sun = g.createRadialGradient(300, 70, 0, 300, 70, 60);
-        sun.addColorStop(0, "rgba(255,255,245,1)");
-        sun.addColorStop(1, "rgba(255,255,245,0)");
+        const sun = g.createRadialGradient(600, 140, 0, 600, 140, 110);
+        sun.addColorStop(0, "rgba(255,255,248,1)");
+        sun.addColorStop(1, "rgba(255,255,248,0)");
         g.fillStyle = sun;
-        g.fillRect(200, 0, 200, 160);
-        for (let i = 0; i < 420; i++) {
-          const x = rnd() * 1024, h = 18 + rnd() * 60;
-          g.fillStyle = ["#2c332d", "#363f37", "#262c27", "#414a41"][Math.floor(rnd() * 4)];
-          g.beginPath();
-          g.ellipse(x, 256 - h * 0.5, 14 + rnd() * 26, h * 0.5, 0, 0, Math.PI * 2);
-          g.fill();
+        g.fillRect(450, 0, 300, 300);
+        // Tree line: trunks, then layered canopy with lit and shaded clumps.
+        for (let i = 0; i < 120; i++) {
+          const x = rnd() * W;
+          g.fillStyle = "#2a2622";
+          g.fillRect(x, HZ - 90 - rnd() * 40, 4 + rnd() * 5, 90 + rnd() * 40);
         }
-        const ground = g.createLinearGradient(0, 256, 0, 512);
-        ground.addColorStop(0, "#7a766e");
-        ground.addColorStop(1, "#34332f");
+        for (let layer = 0; layer < 3; layer++) {
+          for (let i = 0; i < 520; i++) {
+            const x = rnd() * W, h = 30 + rnd() * (90 + layer * 30);
+            const shade = ["#26302a", "#313d33", "#3d4a3e", "#4a5848", "#1f2822"][Math.floor(rnd() * 5)];
+            g.fillStyle = shade;
+            g.beginPath();
+            g.ellipse(x, HZ - 40 - h * 0.6 + layer * 18, 16 + rnd() * 34, h * 0.5, 0, 0, Math.PI * 2);
+            g.fill();
+          }
+        }
+        const ground = g.createLinearGradient(0, HZ, 0, H);
+        ground.addColorStop(0, "#8c877e");
+        ground.addColorStop(0.4, "#6f6b64");
+        ground.addColorStop(1, "#3a3935");
         g.fillStyle = ground;
-        g.fillRect(0, 256, 1024, 256);
-        for (let i = 0; i < 4000; i++) {
-          g.fillStyle = `rgba(${rnd() > 0.5 ? "255,255,255" : "0,0,0"},0.12)`;
-          g.fillRect(rnd() * 1024, 256 + rnd() * 256, 2, 2);
+        g.fillRect(0, HZ, W, H - HZ);
+        for (let i = 0; i < 16000; i++) {
+          const v = Math.floor(rnd() * 255);
+          g.fillStyle = `rgba(${v},${v},${v},0.18)`;
+          g.fillRect(rnd() * W, HZ + rnd() * (H - HZ), 2 + rnd() * 2, 2);
         }
         const tex = new THREE.CanvasTexture(c);
         tex.mapping = THREE.EquirectangularReflectionMapping;
@@ -577,16 +591,17 @@
       // Fine horizontal brushing, used as a roughness map.
       const brushedTex = canvasTexture((g) => {
         const rnd = seeded(9);
-        g.fillStyle = "#c8c8c8";
+        g.fillStyle = "#e4e4e4";
         g.fillRect(0, 0, 512, 512);
         for (let i = 0; i < 1400; i++) {
-          const v = 150 + Math.floor(rnd() * 105);
+          const v = 200 + Math.floor(rnd() * 55);
           g.fillStyle = `rgba(${v},${v},${v},0.35)`;
           g.fillRect(rnd() * 512 - 256, rnd() * 512, 120 + rnd() * 400, 1);
         }
       }, 1);
       const aluminiumSkin = (extra = {}) =>
-        mat(0xffffff, 0.24, 1, { vertexColors: true, map: skinTex, bumpMap: skinTex, bumpScale: 0.25, roughnessMap: brushedTex, ...extra });
+        // Near-mirror polish: low roughness with only a faint brushed variation.
+        mat(0xffffff, 0.07, 1, { vertexColors: true, map: skinTex, bumpMap: skinTex, bumpScale: 0.15, roughnessMap: brushedTex, ...extra });
       const shellOuterMat = aluminiumSkin();
       const shellInnerMat = mat(0xffffff, 0.55, 0.15, { vertexColors: true, side: THREE.BackSide });
       const jambMat = mat(0x1d1f22, 0.8, 0.1, { side: THREE.DoubleSide });
