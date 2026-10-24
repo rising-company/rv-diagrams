@@ -297,6 +297,7 @@
           <button id="btn-entry-door">Open entry door</button>
           <button id="btn-bath-door">Open bath door</button>
           <button id="btn-cutaway" aria-pressed="false">Cutaway roof</button>
+          <button id="btn-awning">Extend awning</button>
         </div>
         <div class="nav-row" id="jump-row" hidden>
           <button data-jump="dinette">Dinette</button>
@@ -356,15 +357,15 @@
       // Openings cut through the shell. Side = which run of the shell they sit on.
       const OPENINGS = [
         { id: "entry", kind: "door", side: "curb", x0: L.entryDoor.x0, x1: L.entryDoor.x1, y0: L.entryDoor.y0, y1: L.entryDoor.y1 },
-        { id: "win-bed-street", kind: "window", side: "street", x0: -95, x1: -77, y0: 36, y1: 54 },
-        { id: "win-bed-curb", kind: "window", side: "curb", x0: -95, x1: -77, y0: 36, y1: 54 },
-        { id: "win-galley", kind: "window", side: "curb", x0: -4, x1: 12, y0: 42, y1: 56 },
-        { id: "win-lounge-street", kind: "window", side: "street", x0: 64, x1: 88, y0: 38, y1: 56 },
-        { id: "win-dinette-curb", kind: "window", side: "curb", x0: 76, x1: 93, y0: 38, y1: 56 },
-        { id: "win-front", kind: "window", side: "front", z0: -17, z1: 17, y0: 30, y1: 46 },
+        { id: "win-bed-street", kind: "window", side: "street", x0: -95, x1: -77, y0: 36, y1: 56 },
+        { id: "win-bed-curb", kind: "window", side: "curb", x0: -95, x1: -77, y0: 36, y1: 56 },
+        { id: "win-galley", kind: "window", side: "curb", x0: -4, x1: 12, y0: 42, y1: 58 },
+        { id: "win-lounge-street", kind: "window", side: "street", x0: 64, x1: 88, y0: 34, y1: 58 },
+        { id: "win-dinette-curb", kind: "window", side: "curb", x0: 76, x1: 93, y0: 34, y1: 58 },
+        { id: "win-front", kind: "window", side: "front", wrapDeg: 22, y0: 36, y1: 58 },
         { id: "win-rear", kind: "window", side: "rear", z0: -12, z1: 12, y0: 38, y1: 50 },
-        { id: "well-curb", kind: "well", side: "curb", x0: -30, x1: 34, y0: -9, y1: 4 },
-        { id: "well-street", kind: "well", side: "street", x0: -30, x1: 34, y0: -9, y1: 4 }
+        { id: "well-curb", kind: "well", side: "curb", x0: -50, x1: 24, y0: -9, y1: 4 },
+        { id: "well-street", kind: "well", side: "street", x0: -50, x1: 24, y0: -9, y1: 4 }
       ];
 
       // ─── Scene Setup ───────────────────────────────────────────────────────────
@@ -373,6 +374,8 @@
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.0;
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       document.getElementById("canvas-container").appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
@@ -406,6 +409,10 @@
       scene.add(new THREE.AmbientLight(0xfff6ea, 0.22)); // lifts the cabin ceiling, which the sky can't reach
       const keyLight = new THREE.DirectionalLight(0xfff4e6, 0.7);
       keyLight.position.set(300, 500, 400);
+      keyLight.castShadow = true;
+      keyLight.shadow.mapSize.set(2048, 2048);
+      Object.assign(keyLight.shadow.camera, { left: -320, right: 320, top: 320, bottom: -320, near: 100, far: 1400 });
+      keyLight.shadow.bias = -0.0005;
       scene.add(keyLight);
       const fillLight = new THREE.DirectionalLight(0x3af0a0, 0.18);
       fillLight.position.set(-400, 200, -300);
@@ -425,6 +432,14 @@
       const gridHelper = new THREE.GridHelper(1600, 64, 0x1a3a2a, 0x111820);
       gridHelper.position.y = L.groundY;
       scene.add(gridHelper);
+
+      (function shadowCatcher() {
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), new THREE.ShadowMaterial({ opacity: 0.35 }));
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = L.groundY + 0.1;
+        ground.receiveShadow = true;
+        scene.add(ground);
+      })();
 
       (function groundShadow() {
         const c = document.createElement("canvas");
@@ -508,15 +523,59 @@
         return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, envMapIntensity: metal > 0.5 ? 1 : 0.3, ...extra });
       }
 
-      const shellOuterMat = mat(0xd9dee3, 0.28, 0.9);
+      // Riveted panel seams: one tile = 48″ along the body × 24″ up the curve.
+      const skinTex = canvasTexture((g) => {
+        const rnd = seeded(5);
+        g.fillStyle = "#e9ebed";
+        g.fillRect(0, 0, 512, 512);
+        for (let i = 0; i < 300; i++) {
+          g.fillStyle = `rgba(${rnd() > 0.5 ? "255,255,255" : "120,128,136"},${0.015 + rnd() * 0.02})`;
+          g.fillRect(0, rnd() * 512, 512, 1);
+        }
+        g.fillStyle = "#8d949b";
+        g.fillRect(0, 0, 512, 3);
+        g.fillRect(0, 0, 3, 512);
+        g.fillStyle = "#7a8188";
+        for (let t = 10; t < 512; t += 21) {
+          g.beginPath();
+          g.arc(t, 9, 2.6, 0, Math.PI * 2);
+          g.arc(9, t, 2.6, 0, Math.PI * 2);
+          g.fill();
+        }
+      }, 1);
+      skinTex.repeat.set(1, 1);
+      const shellOuterMat = mat(0xffffff, 0.3, 0.9, { vertexColors: true, map: skinTex, bumpMap: skinTex, bumpScale: 0.25 });
       const shellInnerMat = mat(0xffffff, 0.55, 0.15, { vertexColors: true, side: THREE.BackSide });
-      const jambMat = mat(0x2a2d31, 0.8, 0.1, { side: THREE.DoubleSide });
-      const glassMat = mat(0x223040, 0.05, 0.6, { transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
+      const jambMat = mat(0x1d1f22, 0.8, 0.1, { side: THREE.DoubleSide });
+      const glassMat = mat(0x0e1318, 0.05, 0.6, { transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+      const frontMat = mat(0xf2e2c6, 0.55, 0.0, { map: laminateTex });
+      const darkGlassMat = mat(0x07090b, 0.1, 0.5);
+      const amberMat = mat(0xff9a1f, 0.3, 0.1, { emissive: 0x7a3a00 });
+      const padMat = mat(0xe8601c, 0.6, 0.0);
       const floorMat = mat(0xffffff, 0.75, 0.0, { map: plankTex });
       const woodMat = mat(0xffffff, 0.65, 0.0, { map: laminateTex });
       const counterMat = mat(0xf0eee6, 0.4, 0.0);
       const benchMat = mat(0xd9c66a, 0.75, 0.0);
-      const tableMat = mat(0x7a3f1c, 0.6, 0.0);
+      const reclaimedTex = canvasTexture((g) => {
+        const rnd = seeded(31);
+        const tones = ["#6b3a1d", "#7e4723", "#5a301a", "#8a5530", "#734020"];
+        for (let r = 0; r < 7; r++) {
+          let x = -rnd() * 200;
+          while (x < 512) {
+            const w = 140 + rnd() * 260;
+            g.fillStyle = tones[Math.floor(rnd() * tones.length)];
+            g.fillRect(x, (r * 512) / 7, w, 512 / 7);
+            for (let k = 0; k < 10; k++) {
+              g.fillStyle = `rgba(30,15,5,${0.1 + rnd() * 0.15})`;
+              g.fillRect(x, (r * 512) / 7 + rnd() * (512 / 7), w, 1 + rnd());
+            }
+            x += w;
+          }
+          g.fillStyle = "rgba(20,10,4,0.6)";
+          g.fillRect(0, (r * 512) / 7, 512, 2);
+        }
+      }, 1);
+      const tableMat = mat(0xffffff, 0.6, 0.0, { map: reclaimedTex });
       const chromeMat = mat(0xcfd4d8, 0.2, 0.95);
       const blackMat = mat(0x18191b, 0.45, 0.2);
       const whiteMat = mat(0xf4f3ef, 0.35, 0.0);
@@ -525,7 +584,6 @@
       const blanketMat = mat(0x7a8fa6, 0.9, 0.0);
       const screenMat = mat(0x0b0d10, 0.15, 0.4);
       const tireMat = mat(0x141414, 0.9, 0.0);
-      const propaneMat = mat(0xe9ecef, 0.4, 0.2);
       const frameMat = mat(0x2b2e33, 0.6, 0.5);
       const redLensMat = mat(0xb81818, 0.3, 0.1, { emissive: 0x400000 });
 
@@ -602,6 +660,12 @@
       const outerRings = RINGS.map((r) => ringPoints(profile(r, L.skin)));
       const midRings = RINGS.map((r) => ringPoints(profile(r, L.skin / 2)));
       innerRings[0].forEach((p) => SEG.push(p[3]));
+      // For corner-arc samples: degrees away from the end cap's facing direction (0 = dead ahead).
+      const END_ANGLE = SEG.map((seg, i) => {
+        if (!seg.includes("-")) return seg === "front" || seg === "rear" ? 0 : 90;
+        const frac = (i - SEG.indexOf(seg)) / NC;
+        return seg === "front-street" || seg === "rear-curb" ? (1 - frac) * 90 : frac * 90;
+      });
 
       // Which opening (if any) each quad (ring k → k+1, point i → i+1) belongs to.
       const quadOpening = new Map();
@@ -618,8 +682,11 @@
             let hit = false;
             if (o.side === "curb" || o.side === "street") {
               hit = SEG[i] === o.side && SEG[i2] === o.side && cx >= o.x0 && cx <= o.x1;
+            } else if (o.wrapDeg) {
+              // Wraparound: the whole end plus the corners up to wrapDeg, cut along sample lines.
+              hit = SEG[i].startsWith(o.side) && SEG[i2].startsWith(o.side) && Math.max(END_ANGLE[i], END_ANGLE[i2]) <= o.wrapDeg;
             } else {
-              hit = SEG[i].startsWith(o.side) && SEG[i2].startsWith(o.side) && cz >= o.z0 && cz <= o.z1;
+              hit = SEG[i] === o.side && SEG[i2] === o.side && cz >= o.z0 && cz <= o.z1;
             }
             if (hit) {
               quadOpening.set(qkey(k, i), o.id);
@@ -630,15 +697,16 @@
       }
 
       // Build a compact indexed geometry from a list of triangles over ring vertices.
-      function buildGeometry(triangles, vertexOf, colorOf) {
+      function buildGeometry(triangles, vertexOf, colorOf, uvOf) {
         const map = new Map();
-        const positions = [], colors = [], index = [];
+        const positions = [], colors = [], uvs = [], index = [];
         const vid = (key) => {
           if (!map.has(key)) {
             const p = vertexOf(key);
             map.set(key, positions.length / 3);
             positions.push(p[0], p[1], p[2]);
             if (colorOf) colors.push(...colorOf(p));
+            if (uvOf) uvs.push(...uvOf(key, p));
           }
           return map.get(key);
         };
@@ -646,6 +714,7 @@
         const geo = new THREE.BufferGeometry();
         geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
         if (colorOf) geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+        if (uvOf) geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
         geo.setIndex(index);
         geo.computeVertexNormals();
         return geo;
@@ -722,12 +791,30 @@
         return [c.r, c.g, c.b];
       };
 
+      // Distance up the curve from the belly, per ring, so panel rows follow the shell.
+      const ringArc = [0];
+      for (let k = 1; k < K; k++) {
+        const a = innerRings[k - 1][NS >> 1], b = innerRings[k][NS >> 1];
+        ringArc.push(ringArc[k - 1] + Math.hypot(a[1] - b[1], a[2] - b[2]));
+      }
+      const BELT_Y = 34;
+      const beltArc = ringArc[BELT_Y - L.bellyY];
+      const skinUv = (key, p) => {
+        const k = Number(key.split(":")[1]);
+        return [p[0] / 48, (ringArc[k] - beltArc) / 24];
+      };
+      const body = new THREE.Color(0xc4c9ce), guard = new THREE.Color(0xf4f6f8);
+      const outerColor = (p) => {
+        const c = p[0] > L.halfLen - 34 && p[1] < 22 ? guard : body; // polished stone guard across the lower front
+        return [c.r, c.g, c.b];
+      };
+
       const shellInfo = {
         name: "Aluminium Shell",
         mat: "Riveted aluminium monocoque",
         desc: "Curved Airstream shell. The profile is approximated — side, front and rear photos with a tape in frame would let us trace the real curve."
       };
-      add(new THREE.Mesh(buildGeometry([...shellSkin("o", null), ...caps("o", true)], vertexOf), shellOuterMat), shellInfo);
+      add(new THREE.Mesh(buildGeometry([...shellSkin("o", null), ...caps("o", true)], vertexOf, outerColor, skinUv), shellOuterMat), shellInfo).castShadow = true;
       add(new THREE.Mesh(buildGeometry([...shellSkin("i", null), ...caps("i", false)], vertexOf, innerColor), shellInnerMat), {
         name: "Interior Liner",
         mat: "Aluminium walls · vinyl ceiling",
@@ -757,15 +844,15 @@
         const d = L.entryDoor;
         const hinge = new THREE.Vector3(d.x0, 0, L.halfWid + L.skin);
         const doorColor = (p) => {
-          const frosted = p[1] > 44 && p[1] < 62 && p[0] > d.x0 + 4 && p[0] < d.x1 - 4;
-          const c = new THREE.Color(frosted ? 0xe3eaee : 0xc9ced3);
+          const glass = p[1] > 42 && p[1] < 61 && p[0] > d.x0 + 5 && p[0] < d.x1 - 5;
+          const c = new THREE.Color(glass ? 0x0d1115 : 0xc4c9ce);
           return [c.r, c.g, c.b];
         };
-        const outerGeo = buildGeometry(shellSkin("o", "entry"), vertexOf, doorColor);
+        const outerGeo = buildGeometry(shellSkin("o", "entry"), vertexOf, doorColor, skinUv);
         const innerGeo = buildGeometry(shellSkin("i", "entry"), vertexOf);
         outerGeo.translate(-hinge.x, 0, -hinge.z);
         innerGeo.translate(-hinge.x, 0, -hinge.z);
-        const outerMat = mat(0xffffff, 0.3, 0.85, { vertexColors: true, side: THREE.DoubleSide });
+        const outerMat = mat(0xffffff, 0.3, 0.85, { vertexColors: true, map: skinTex, bumpMap: skinTex, bumpScale: 0.25, side: THREE.DoubleSide });
         const innerMat = mat(0xb8bec4, 0.6, 0.3, { side: THREE.DoubleSide });
         const pivot = new THREE.Group();
         pivot.position.copy(hinge);
@@ -782,7 +869,12 @@
         const innerHandle = handle.clone();
         innerHandle.position.z = -L.skin - 0.8;
         parts.push(handle, innerHandle);
+        const trimPts = ringPoints(profile({ y: BELT_Y }, L.skin + 0.3))
+          .filter((p) => p[3] === "curb" && p[0] > d.x0 + 0.6 && p[0] < d.x1 - 0.6)
+          .map((p) => new THREE.Vector3(p[0] - hinge.x, p[1], p[2] - hinge.z));
+        parts.push(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(trimPts), 8, 0.45, 6), chromeMat));
         parts.forEach((m) => add(m, info, pivot));
+        parts[0].castShadow = true;
         doors.entry = { pivot, angle: 0, target: 0, sign: -1, openRad: (d.openDeg * Math.PI) / 180, mats: [outerMat, innerMat] };
 
         // Pull-out step under the door.
@@ -793,7 +885,7 @@
         }).position.set((d.x0 + d.x1) / 2, -12, L.halfWid + 7);
       })();
 
-      // Bathroom door: flat panel on the aisle wall, hinged on its rear jamb, swings into the bath.
+      // Bathroom door: flat panel on the aisle wall, hinged on its rear jamb, swings out into the aisle.
       (function bathDoor() {
         const d = L.bathDoor, w = d.x1 - d.x0;
         const pivot = new THREE.Group();
@@ -804,15 +896,18 @@
         panel.position.set(w / 2, d.h / 2, -0.5);
         const knob = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 8), chromeMat);
         knob.position.set(w - 2.5, 36, 0.8);
+        const innerKnob = knob.clone();
+        innerKnob.position.z = -1.8;
         const info = {
           name: "Bathroom Door",
           mat: "Laminate panel",
-          desc: "Read from the floorplan: hinged at the rear jamb, swings into the bath. Confirm hinge side and swing.",
+          desc: "Swings out into the aisle. Hinge side (rear jamb) read from the floorplan — confirm.",
           action: "bath"
         };
         add(panel, info, pivot);
         add(knob, info, pivot);
-        doors.bath = { pivot, angle: 0, target: 0, sign: 1, openRad: (d.openDeg * Math.PI) / 180, mats: [doorMat] };
+        add(innerKnob, info, pivot);
+        doors.bath = { pivot, angle: 0, target: 0, sign: -1, openRad: (d.openDeg * Math.PI) / 180, mats: [doorMat] };
       })();
 
       // ═══════════════════════════════════════════════════════════════════
@@ -1058,6 +1153,77 @@
       tallBox(88.8, 100, -47, -32, 58, 90, woodMat, { name: "Overhead Locker", mat: "Laminate", desc: "" });
       tallBox(88.8, 100, 32, 47, 58, 90, woodMat, { name: "Overhead Locker", mat: "Laminate", desc: "" });
 
+      // ── Cabinet fronts, handles and small fittings ───────────────────────────
+      // Lowest point of the curved ceiling above an aisle-facing face at |z|, minus a margin.
+      const yTop = (z) => L.shoulderY + (L.crownY - L.shoulderY) * Math.sqrt(Math.max(0, 1 - (z / L.halfWid) ** 2)) - 2.5;
+
+      // Door panels proud of a cabinet face. axis "z": face plane z = at, panels span x; axis "x": the reverse.
+      function fronts(axis, at, dir, a0, a1, y0, y1, n, handleAt = "mid") {
+        const w = (a1 - a0) / n;
+        for (let j = 0; j < n; j++) {
+          const c = a0 + w * (j + 0.5), pw = w - 0.6, ph = y1 - y0 - 0.6, yc = (y0 + y1) / 2;
+          const hc = n === 1 ? c + pw / 2 - 2 : j % 2 ? c - pw / 2 + 1.6 : c + pw / 2 - 1.6;
+          const hy = handleAt === "top" ? y1 - 2.5 : handleAt === "bottom" ? y0 + 2.5 : yc;
+          const [pOff, hOff] = [at + dir * 0.25, at + dir * 0.8];
+          if (axis === "z") {
+            box(pw, ph, 0.5, frontMat, c, yc, pOff, null);
+            box(0.6, 3.5, 0.6, chromeMat, hc, hy, hOff, null);
+          } else {
+            box(0.5, ph, pw, frontMat, pOff, yc, c, null);
+            box(0.6, 3.5, 0.6, chromeMat, hOff, hy, hc, null);
+          }
+        }
+      }
+      fronts("z", -23, 1, -66.1, -51, 2, 72, 1); // street wardrobe
+      fronts("z", 25, -1, -66.1, -51.5, 2, 72, 1); // linen
+      fronts("z", 24, -1, -51.5, -25.9, 2, 72, 2); // curb wardrobe
+      fronts("z", 24, -1, -25.9, -15.3, 2, 44, 1, "top"); // pantry
+      fronts("z", 24, -1, -25.9, -15.3, 46, yTop(24), 1, "bottom");
+      fronts("z", 23.5, -1, -15.3, 18, 3, 24, 2, "top"); // galley base
+      fronts("z", 23.5, -1, -15.3, 18, 25, 33, 2);
+      fronts("z", 30, -1, -15.3, 43, 58.5, yTop(30), 3, "bottom"); // galley locker
+      fronts("z", -30, 1, 43, 88, 58.5, yTop(30), 2, "bottom"); // street locker
+      fronts("z", -32, 1, 88.8, 100, 58.5, yTop(32), 1, "bottom"); // dinette lockers
+      fronts("z", 32, -1, 88.8, 100, 58.5, yTop(32), 1, "bottom");
+      fronts("z", -32, 1, -23.5, 15.9, 3, 29, 2, "top"); // vanity
+      fronts("x", -54.6, 1, -16, 16, 2, 14, 2, "top"); // bed base
+      box(0.8, 8, 0.8, chromeMat, 19.5, 24, -15.2, null); // fridge handles
+      box(0.8, 8, 0.8, chromeMat, 19.5, 36, -15.2, null);
+
+      // Range: oven window, handle, knobs. Microwave door and keypad.
+      box(18, 9, 0.4, darkGlassMat, 30.6, 14, 23.0, { name: "Oven", mat: "Atwood oven", desc: "" });
+      box(18, 0.8, 0.8, chromeMat, 30.6, 22.5, 22.6, null);
+      [22.5, 27.5, 33.5, 38.5].forEach((x) => {
+        const k = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 1, 12), blackMat);
+        k.rotation.x = Math.PI / 2;
+        k.position.set(x, 29.5, 22.8);
+        add(k, null);
+      });
+      box(6.5, 7, 0.3, darkGlassMat, -11.2, 52, 23.35, null);
+      box(2.4, 8, 0.3, blackMat, -6.3, 52, 23.35, null);
+
+      // Faucet behind the sink.
+      (function faucet() {
+        const info = { name: "Galley Faucet", mat: "Chrome", desc: "" };
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 7, 12), chromeMat);
+        post.position.set(2, 39, 43.5);
+        add(post, info);
+        box(0.9, 0.9, 6, chromeMat, 2, 42.2, 40.8, info);
+      })();
+
+      // Mini blinds, half raised, in the galley window.
+      for (let y = 50; y <= 57; y += 1) box(16, 0.25, 1.2, whiteMat, 4, y, 42.6 - (y - 50) * 0.25, null);
+      box(16.4, 1.4, 1.6, whiteMat, 4, 58.2, 40.4, { name: "Mini Blinds", mat: "Vinyl slats", desc: "" });
+
+      // Fire extinguisher and entry mat by the door.
+      (function smallThings() {
+        const ext = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 13, 16), mat(0xc4161c, 0.35, 0.1));
+        ext.position.set(43.8, 10, 26);
+        add(ext, { name: "Fire Extinguisher", mat: "Dry chemical", desc: "Mounted at the end of the galley by the door." });
+        box(1, 2, 1, blackMat, 43.8, 17.5, 26, null);
+        box(24, 0.4, 14, mat(0x2f3a40, 0.95, 0), (L.entryDoor.x0 + L.entryDoor.x1) / 2, 0.25, 36, { name: "Entry Mat", mat: "Rubber-backed rug", desc: "" });
+      })();
+
       // ── Ceiling ──────────────────────────────────────────────────────────────
       box(26, 2, 22, whiteMat, -4, 76, 0, { name: "A/C Ceiling Shroud", mat: "Rooftop A/C", desc: "" });
       box(14, 0.3, 8, blackMat, -4, 74.9, 0, null);
@@ -1070,19 +1236,74 @@
       // ═══════════════════════════════════════════════════════════════════
       // EXTERIOR — running gear, tongue, roof
       // ═══════════════════════════════════════════════════════════════════
-      [-14, 16].forEach((x) =>
+      // Point on the outer skin at height y nearest to plan position (x, z).
+      function shellPoint(y, x, z, out = L.skin + 0.4) {
+        const ring = y <= L.shoulderY ? { y } : { phi: Math.asin(Math.min(1, (y - L.shoulderY) / (L.crownY - L.shoulderY + out))) };
+        let best = null, bd = Infinity;
+        for (const p of ringPoints(profile(ring, out))) {
+          const dist = Math.hypot(p[0] - x, p[2] - z);
+          if (dist < bd) [bd, best] = [dist, p];
+        }
+        return best;
+      }
+      const shadowed = (m) => ((m.castShadow = true), m);
+
+      // Tandem axle, polished rims (axles sit behind the door, per the exterior photo).
+      const tireInfo = { name: "Tire", mat: "ST225/75R15 · polished rim", desc: "Tandem axle. Axle positions estimated from the exterior photo." };
+      [-31, 2].forEach((x) =>
         [1, -1].forEach((s) => {
-          const tire = new THREE.Mesh(new THREE.CylinderGeometry(13.5, 13.5, 8, 32), tireMat);
-          tire.rotation.x = Math.PI / 2;
-          tire.position.set(x, L.groundY + 13.5, s * 42);
-          add(tire, { name: "Tire", mat: "ST225/75R15", desc: "Tandem axle. Axle positions are estimated." });
-          const hub = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 8.4, 24), chromeMat);
-          hub.rotation.x = Math.PI / 2;
-          hub.position.copy(tire.position);
-          add(hub, null);
+          const at = new THREE.Vector3(x, L.groundY + 13.5, s * 42);
+          const wheel = (r, w, m, info) => {
+            const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 32), m);
+            c.rotation.x = Math.PI / 2;
+            c.position.copy(at);
+            return shadowed(add(c, info));
+          };
+          wheel(13.5, 8, tireMat, tireInfo);
+          wheel(7.8, 8.3, chromeMat, tireInfo);
+          wheel(2.6, 9.2, chromeMat, null);
+          for (let j = 0; j < 6; j++) {
+            const a = (j / 6) * Math.PI * 2;
+            box(0.8, 0.8, 9, frameMat, x + Math.cos(a) * 4.5, at.y + Math.sin(a) * 4.5, s * 42, null);
+          }
         })
       );
-      [1, -1].forEach((s) => box(66, 14, 8, mat(0x0d0e10, 0.9, 0), 2, -2, s * 41, null)); // wheel-well tubs
+      [1, -1].forEach((s) => box(74, 14, 8, mat(0x0d0e10, 0.9, 0), -13, -2, s * 41, null)); // wheel-well tubs
+      box(240, 5, 60, frameMat, 0, -11, 0, { name: "Chassis", mat: "Steel frame", desc: "" });
+
+      // Stabilizer jacks with the orange pads from the photo.
+      [[L.halfLen - 18, 1], [L.halfLen - 18, -1], [-L.halfLen + 18, 1], [-L.halfLen + 18, -1]].forEach(([x, s]) => {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(2, 15, 2), frameMat);
+        leg.position.set(x + Math.sign(x) * 3, -14.5, s * 34);
+        leg.rotation.z = Math.sign(x) * 0.35;
+        add(leg, { name: "Stabilizer Jack", mat: "Scissor jack", desc: "" });
+        box(8, 1.5, 8, padMat, x + Math.sign(x) * 5.5, L.groundY + 0.75, s * 34, { name: "Jack Pad", mat: "Orange snap pad", desc: "" });
+      });
+
+      // Marker lights: amber up front and along the sides, red at the rear.
+      [
+        [70, 200, 18, amberMat], [70, 200, -18, amberMat],
+        [8, 108, 100, amberMat], [8, 108, -100, amberMat],
+        [8, -108, 100, redLensMat], [8, -108, -100, redLensMat]
+      ].forEach(([y, x, z, m]) => {
+        const p = shellPoint(y, x, z);
+        box(3, 1.6, 3, m, p[0], p[1], p[2], { name: "Marker Light", mat: "LED clearance light", desc: "" });
+      });
+
+      // Bright belt-line trim at window-sill height, broken by the door (which carries its own piece).
+      (function beltTrim() {
+        const pts = ringPoints(profile({ y: BELT_Y }, L.skin + 0.3));
+        const inDoor = (p) => p[3] === "curb" && p[0] > L.entryDoor.x0 - 0.6 && p[0] < L.entryDoor.x1 + 0.6;
+        const start = pts.findIndex((p, i) => i > 0 && inDoor(pts[i - 1]) && !inDoor(p));
+        const run = [...pts.slice(start), ...pts.slice(0, start)].filter((p) => !inDoor(p));
+        const curvePts = [];
+        run.forEach((p) => {
+          const v = new THREE.Vector3(p[0], p[1], p[2]);
+          if (!curvePts.length || curvePts[curvePts.length - 1].distanceTo(v) > 0.2) curvePts.push(v);
+        });
+        const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curvePts), curvePts.length * 2, 0.45, 6, false);
+        add(new THREE.Mesh(tube, chromeMat), { name: "Belt-Line Trim", mat: "Polished aluminium", desc: "" });
+      })();
 
       (function tongue() {
         const info = { name: "A-Frame Tongue", mat: "Steel", desc: "Hitch frame — propane tanks and jack ride here." };
@@ -1099,15 +1320,92 @@
         const jack = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 28, 12), frameMat);
         jack.position.set(L.halfLen + 44, -10, 0);
         add(jack, { name: "Tongue Jack", mat: "Electric jack", desc: "" });
-        [-9, 9].forEach((z) => {
-          const tank = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 22, 24), propaneMat);
-          tank.position.set(L.halfLen + 24, 2, z);
-          add(tank, { name: "Propane Tank", mat: "30 lb LP cylinder", desc: "" });
-        });
+        const boxMat = mat(0xd5dade, 0.25, 0.9);
+        shadowed(box(24, 30, 24, boxMat, L.halfLen + 22, 5.5, 0, {
+          name: "Tongue Box",
+          mat: "Polished aluminium",
+          desc: "Box on the A-frame — propane cover or battery box? Confirm what's inside."
+        }));
+        box(25, 1.5, 25, boxMat, L.halfLen + 22, 21, 0, null);
+        shadowed(box(10, 20, 16, mat(0x1c1d1f, 0.95, 0), L.halfLen + 39, 0.5, 8, {
+          name: "Covered Item",
+          mat: "Weather cover",
+          desc: "Black-covered unit on the tongue (generator? grill?) — confirm."
+        }));
       })();
 
       box(4, 6, 64, frameMat, -L.halfLen - 6, -10, 0, { name: "Rear Bumper", mat: "Steel / storage tube", desc: "" });
       [-30, 30].forEach((z) => box(1, 4, 6, redLensMat, -L.halfLen - 3.5, 2, z, { name: "Tail Light", mat: "LED", desc: "" }));
+
+      // ── Awning (curb side) — extends and retracts ─────────────────────────────
+      const awning = (function buildAwning() {
+        const x0 = -104, x1 = 92, y = 68, reach = 96, drop = 9;
+        const wallZ = shellPoint(y, 0, 100)[2] + 2.5;
+        const info = { name: "Awning", mat: "Acrylic fabric · aluminium arms", desc: "Curb-side patio awning.", action: "awning" };
+        const caseMat = mat(0xcfd4d8, 0.3, 0.9);
+        const tube = (r, m) => {
+          const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, x1 - x0, 20), m);
+          c.rotation.z = Math.PI / 2;
+          return shadowed(add(c, info));
+        };
+        tube(2.6, caseMat).position.set((x0 + x1) / 2, y, wallZ);
+        const fabricGeo = new THREE.BufferGeometry();
+        fabricGeo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(12), 3));
+        fabricGeo.setIndex([0, 2, 1, 1, 2, 3]);
+        const fabric = shadowed(add(new THREE.Mesh(fabricGeo, mat(0x3f4246, 0.95, 0, { side: THREE.DoubleSide })), info));
+        const bar = tube(1.6, caseMat);
+        const arms = [x0 + 3, x1 - 3].map((x) => ({ x, mesh: shadowed(add(new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1, 8), caseMat), info)) }));
+        const state = { t: 0, target: 0 };
+        const up = new THREE.Vector3(0, 1, 0);
+        function update() {
+          const out = state.t > 0.02;
+          const z = wallZ + reach * state.t, yy = y - drop * state.t;
+          const pos = fabricGeo.attributes.position;
+          [[x0, y, wallZ], [x1, y, wallZ], [x0, yy, z], [x1, yy, z]].forEach((v, j) => pos.setXYZ(j, ...v));
+          pos.needsUpdate = true;
+          fabricGeo.computeVertexNormals();
+          fabricGeo.computeBoundingSphere();
+          fabric.visible = bar.visible = out;
+          bar.position.set((x0 + x1) / 2, yy, z);
+          arms.forEach(({ x, mesh }) => {
+            const a = new THREE.Vector3(x, -2, L.halfWid + L.skin + 0.8);
+            const b = out ? new THREE.Vector3(x, yy, z) : new THREE.Vector3(x, y - 3, wallZ);
+            mesh.position.copy(a).add(b).multiplyScalar(0.5);
+            mesh.scale.y = a.distanceTo(b);
+            mesh.quaternion.setFromUnitVectors(up, b.clone().sub(a).normalize());
+          });
+        }
+        update();
+        return { state, update };
+      })();
+
+      // Outdoor rug under the awning.
+      (function rug() {
+        const tex = canvasTexture((g) => {
+          g.fillStyle = "#e9e4d8";
+          g.fillRect(0, 0, 512, 512);
+          g.strokeStyle = "#1c1c1c";
+          g.lineWidth = 14;
+          g.strokeRect(14, 14, 484, 484);
+          g.lineWidth = 4;
+          g.strokeRect(34, 34, 444, 444);
+          g.fillStyle = "#2b2b2b";
+          [[150, 180], [360, 180], [256, 330], [150, 420], [360, 420]].forEach(([x, y]) => {
+            g.beginPath();
+            g.moveTo(x, y - 40);
+            g.lineTo(x + 34, y);
+            g.lineTo(x, y + 40);
+            g.lineTo(x - 34, y);
+            g.closePath();
+            g.fill();
+          });
+        }, 1);
+        const r = new THREE.Mesh(new THREE.PlaneGeometry(108, 64), mat(0xffffff, 0.95, 0, { map: tex }));
+        r.rotation.x = -Math.PI / 2;
+        r.position.set(-10, L.groundY + 0.3, 112);
+        r.receiveShadow = true;
+        add(r, { name: "Outdoor Rug", mat: "Woven polypropylene", desc: "" });
+      })();
 
       (function roof() {
         const top = L.crownY + L.skin;
@@ -1251,7 +1549,7 @@
         dinette: { via: [], pos: [66, -4], look: [132, 34, 4] },
         galley: { via: [], pos: [12, 8], look: [12, 38, 47] },
         bath: { via: [[-13, 6]], pos: [-15, -15], look: [16, 26, -30], before: () => setDoor("bath", true) },
-        bed: { via: [], pos: [-44, 4], look: [-132, 26, 0] }
+        bed: { via: [], pos: [-44, 4], look: [-132, 26, 0], before: () => setDoor("bath", false) }
       };
       function jumpTo(name) {
         if (mode !== "inside" || busy) return;
@@ -1262,6 +1560,11 @@
         const frames = via.map(([x, z]) => ({ pos: [x, L.eyeY, z], look: [x + (j.pos[0] - x) * 2, L.eyeY - 6, z + (j.pos[1] - z) * 2 || z - 1], fov: INSIDE_FOV, dur: 700 }));
         frames.push({ pos: [j.pos[0], L.eyeY, j.pos[1]], look: j.look, fov: INSIDE_FOV, dur: 1000 });
         runPath(frames, () => settleInside(j.pos[0], j.pos[1], j.look));
+      }
+
+      function setAwning(out) {
+        awning.state.target = out ? 1 : 0;
+        updateHud();
       }
 
       function setCutaway(on) {
@@ -1288,7 +1591,7 @@
         const list = STATIC_OBSTACLES.slice();
         const d = L.bathDoor;
         if (doors.bath.angle < 0.6) list.push([d.x0, d.x1, -10.5, -9.5]);
-        else list.push([d.x0 - 1, d.x0, -9.5 - (d.x1 - d.x0), -9.5]);
+        else list.push([d.x0 - 1, d.x0, d.z, d.z + (d.x1 - d.x0)]); // open: lies across the aisle
         return list;
       }
       function collide(px, pz) {
@@ -1360,6 +1663,7 @@
           return doorOpen("entry") ? "▸ CLICK TO STEP OUTSIDE" : "▸ CLICK TO OPEN";
         }
         if (info.action === "bath") return doorOpen("bath") ? "▸ CLICK TO CLOSE" : "▸ CLICK TO OPEN";
+        if (info.action === "awning") return awning.state.target ? "▸ CLICK TO RETRACT" : "▸ CLICK TO EXTEND";
         if (info.walk && mode === "inside") return "▸ CLICK TO WALK HERE";
         return "";
       }
@@ -1367,7 +1671,7 @@
       let hovered = null;
       function setHover(info) {
         if (hovered === info) return;
-        const glow = (id, on) => doors[id].mats.forEach((m) => m.emissive.setHex(on ? 0x0b3a26 : 0x000000));
+        const glow = (id, on) => doors[id] && doors[id].mats.forEach((m) => m.emissive.setHex(on ? 0x0b3a26 : 0x000000));
         if (hovered && hovered.action) glow(hovered.action, false);
         hovered = info;
         if (info && info.action) glow(info.action, true);
@@ -1404,6 +1708,8 @@
           if (!doorOpen("entry")) setDoor("entry", true);
           else if (mode === "outside") enterCabin();
           else exitCabin();
+        } else if (info.action === "awning") {
+          setAwning(!awning.state.target);
         } else if (info.action === "bath") {
           setDoor("bath", !doorOpen("bath"));
         } else if (info.walk && mode === "inside") {
@@ -1517,6 +1823,8 @@
         $("jump-row").hidden = !inside;
         $("btn-entry-door").textContent = doorOpen("entry") ? "Close entry door" : "Open entry door";
         $("btn-bath-door").textContent = doorOpen("bath") ? "Close bath door" : "Open bath door";
+        $("btn-awning").textContent = awning.state.target ? "Retract awning" : "Extend awning";
+        $("btn-awning").hidden = inside;
         $("hint-outside").hidden = inside;
         $("hint-inside").hidden = !inside;
         $("reticle").style.display = inside ? "block" : "none";
@@ -1526,6 +1834,7 @@
       $("btn-exit").addEventListener("click", exitCabin);
       $("btn-entry-door").addEventListener("click", () => setDoor("entry", !doorOpen("entry")));
       $("btn-bath-door").addEventListener("click", () => setDoor("bath", !doorOpen("bath")));
+      $("btn-awning").addEventListener("click", () => setAwning(!awning.state.target));
       $("btn-cutaway").addEventListener("click", () => {
         autoRotate = false;
         setCutaway(!cutaway);
@@ -1552,6 +1861,11 @@
         for (const d of Object.values(doors)) {
           d.angle += (d.target - d.angle) * Math.min(1, dt * (reduceMotion ? 30 : 5));
           d.pivot.rotation.y = d.sign * d.angle;
+        }
+        const aw = awning.state;
+        if (Math.abs(aw.target - aw.t) > 0.001) {
+          aw.t += (aw.target - aw.t) * Math.min(1, dt * (reduceMotion ? 30 : 3));
+          awning.update();
         }
 
         if (path) {
