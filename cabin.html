@@ -351,7 +351,7 @@
         entryDoor: { x0: 44, x1: 70, y0: 1, y1: 68, openDeg: 100 },
         bathDoor: { x0: -23.5, x1: -3, z: -9.5, h: 72, openDeg: 88 },
         eyeY: 62,
-        playerR: 7
+        playerR: 6
       };
 
       // Openings cut through the shell. Side = which run of the shell they sit on.
@@ -362,7 +362,7 @@
         { id: "win-galley", kind: "window", side: "curb", x0: -4, x1: 12, y0: 42, y1: 58 },
         { id: "win-lounge-street", kind: "window", side: "street", x0: 64, x1: 88, y0: 34, y1: 58 },
         { id: "win-dinette-curb", kind: "window", side: "curb", x0: 76, x1: 93, y0: 34, y1: 58 },
-        { id: "win-front", kind: "window", side: "front", wrapDeg: 22, y0: 36, y1: 58 },
+        { id: "win-front", kind: "window", side: "front", z0: -17, z1: 17, y0: 36, y1: 56 },
         { id: "win-rear", kind: "window", side: "rear", z0: -12, z1: 12, y0: 38, y1: 50 },
         { id: "well-curb", kind: "well", side: "curb", x0: -50, x1: 24, y0: -9, y1: 4 },
         { id: "well-street", kind: "well", side: "street", x0: -50, x1: 24, y0: -9, y1: 4 }
@@ -382,26 +382,59 @@
       scene.background = new THREE.Color(0x0a0c10);
       scene.fog = new THREE.Fog(0x0a0c10, 900, 2600);
 
+      function seeded(seed) {
+        return () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+      }
+
       const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 1, 6000);
       camera.rotation.order = "YXZ";
 
-      // Soft sky environment so the aluminium reads as metal.
+      // Outdoor environment (sky, tree line, gravel) so the aluminium reflects a scene the
+      // way the real shell does. Only used for reflections — the page background stays dark.
       (function buildEnvironment() {
-        const envScene = new THREE.Scene();
-        const geo = new THREE.SphereGeometry(100, 32, 16);
-        const colors = [];
-        const pos = geo.attributes.position;
-        const sky = new THREE.Color(0x9fb7d0), horizon = new THREE.Color(0xe8eef2), ground = new THREE.Color(0x2a2c30);
-        for (let i = 0; i < pos.count; i++) {
-          const t = pos.getY(i) / 100;
-          const c = t > 0 ? horizon.clone().lerp(sky, t) : horizon.clone().lerp(ground, Math.min(1, -t * 3));
-          colors.push(c.r, c.g, c.b);
+        const c = document.createElement("canvas");
+        c.width = 1024;
+        c.height = 512;
+        const g = c.getContext("2d");
+        const rnd = seeded(41);
+        const sky = g.createLinearGradient(0, 0, 0, 256);
+        sky.addColorStop(0, "#5f8fcc");
+        sky.addColorStop(1, "#e4ecf2");
+        g.fillStyle = sky;
+        g.fillRect(0, 0, 1024, 256);
+        for (let i = 0; i < 14; i++) {
+          g.fillStyle = `rgba(255,255,255,${0.25 + rnd() * 0.35})`;
+          g.beginPath();
+          g.ellipse(rnd() * 1024, 40 + rnd() * 140, 40 + rnd() * 90, 10 + rnd() * 18, 0, 0, Math.PI * 2);
+          g.fill();
         }
-        geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-        envScene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true })));
+        const sun = g.createRadialGradient(300, 70, 0, 300, 70, 60);
+        sun.addColorStop(0, "rgba(255,255,245,1)");
+        sun.addColorStop(1, "rgba(255,255,245,0)");
+        g.fillStyle = sun;
+        g.fillRect(200, 0, 200, 160);
+        for (let i = 0; i < 420; i++) {
+          const x = rnd() * 1024, h = 18 + rnd() * 60;
+          g.fillStyle = ["#2c332d", "#363f37", "#262c27", "#414a41"][Math.floor(rnd() * 4)];
+          g.beginPath();
+          g.ellipse(x, 256 - h * 0.5, 14 + rnd() * 26, h * 0.5, 0, 0, Math.PI * 2);
+          g.fill();
+        }
+        const ground = g.createLinearGradient(0, 256, 0, 512);
+        ground.addColorStop(0, "#7a766e");
+        ground.addColorStop(1, "#34332f");
+        g.fillStyle = ground;
+        g.fillRect(0, 256, 1024, 256);
+        for (let i = 0; i < 4000; i++) {
+          g.fillStyle = `rgba(${rnd() > 0.5 ? "255,255,255" : "0,0,0"},0.12)`;
+          g.fillRect(rnd() * 1024, 256 + rnd() * 256, 2, 2);
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.mapping = THREE.EquirectangularReflectionMapping;
         const pmrem = new THREE.PMREMGenerator(renderer);
-        scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+        scene.environment = pmrem.fromEquirectangular(tex).texture;
         pmrem.dispose();
+        tex.dispose();
       })();
 
       // ─── Lights ────────────────────────────────────────────────────────────────
@@ -460,9 +493,6 @@
       })();
 
       // ─── Textures ──────────────────────────────────────────────────────────────
-      function seeded(seed) {
-        return () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-      }
 
       function canvasTexture(draw, repeatInches) {
         const c = document.createElement("canvas");
@@ -544,7 +574,20 @@
         }
       }, 1);
       skinTex.repeat.set(1, 1);
-      const shellOuterMat = mat(0xffffff, 0.3, 0.9, { vertexColors: true, map: skinTex, bumpMap: skinTex, bumpScale: 0.25 });
+      // Fine horizontal brushing, used as a roughness map.
+      const brushedTex = canvasTexture((g) => {
+        const rnd = seeded(9);
+        g.fillStyle = "#c8c8c8";
+        g.fillRect(0, 0, 512, 512);
+        for (let i = 0; i < 1400; i++) {
+          const v = 150 + Math.floor(rnd() * 105);
+          g.fillStyle = `rgba(${v},${v},${v},0.35)`;
+          g.fillRect(rnd() * 512 - 256, rnd() * 512, 120 + rnd() * 400, 1);
+        }
+      }, 1);
+      const aluminiumSkin = (extra = {}) =>
+        mat(0xffffff, 0.24, 1, { vertexColors: true, map: skinTex, bumpMap: skinTex, bumpScale: 0.25, roughnessMap: brushedTex, ...extra });
+      const shellOuterMat = aluminiumSkin();
       const shellInnerMat = mat(0xffffff, 0.55, 0.15, { vertexColors: true, side: THREE.BackSide });
       const jambMat = mat(0x1d1f22, 0.8, 0.1, { side: THREE.DoubleSide });
       const glassMat = mat(0x0e1318, 0.05, 0.6, { transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
@@ -623,7 +666,7 @@
           y: L.shoulderY + (L.crownY - L.shoulderY + o) * s,
           A: L.crownHalfLen + (L.halfLen - L.crownHalfLen + o) * c,
           B,
-          R: Math.min(B, L.cornerR + o + (L.halfWid - L.cornerR) * s)
+          R: Math.min(B, L.cornerR + o + (L.halfWid - L.cornerR) * s ** 3)
         };
       }
 
@@ -721,7 +764,9 @@
       }
 
       // Vertex keys: "L:k:i" for ring layer L ∈ {o, i, m}, plus cap centres.
-      const layers = { o: outerRings, i: innerRings, m: midRings };
+      const guardRings = RINGS.map((r) => ringPoints(profile(r, L.skin + 1.1)));
+      const stoneRings = RINGS.map((r) => ringPoints(profile(r, L.skin + 0.5)));
+      const layers = { o: outerRings, i: innerRings, m: midRings, g: guardRings, s: stoneRings };
       function vertexOf(key) {
         const [layer, k, i] = key.split(":");
         if (i === undefined) {
@@ -764,7 +809,7 @@
       }
 
       // Side walls joining inner and outer skins around the edge of a quad set.
-      function edgeBand(inSet) {
+      function edgeBand(inSet, inner = "i", outer = "o") {
         const tris = [];
         const has = (k, i) => k >= 0 && k < K - 1 && inSet(k, ((i % N) + N) % N);
         for (let k = 0; k < K - 1; k++) {
@@ -777,7 +822,7 @@
             if (!has(k + 1, i)) edges.push([[k + 1, i], [k + 1, i2]]);
             if (!has(k - 1, i)) edges.push([[k, i], [k, i2]]);
             for (const [[k1, j1], [k2, j2]] of edges) {
-              const a = `i:${k1}:${j1}`, b = `i:${k2}:${j2}`, c = `o:${k1}:${j1}`, d = `o:${k2}:${j2}`;
+              const a = `${inner}:${k1}:${j1}`, b = `${inner}:${k2}:${j2}`, c = `${outer}:${k1}:${j1}`, d = `${outer}:${k2}:${j2}`;
               tris.push([a, b, c], [b, d, c]);
             }
           }
@@ -803,10 +848,14 @@
         const k = Number(key.split(":")[1]);
         return [p[0] / 48, (ringArc[k] - beltArc) / 24];
       };
-      const body = new THREE.Color(0xc4c9ce), guard = new THREE.Color(0xf4f6f8);
+      const body = new THREE.Color(0xc4c9ce);
+      const panelTone = (p) => {
+        const h = Math.sin(Math.floor(p[0] / 48) * 12.9898 + Math.floor((p[1] - BELT_Y) / 18) * 78.233) * 43758.5453;
+        return 0.94 + (h - Math.floor(h)) * 0.1;
+      };
       const outerColor = (p) => {
-        const c = p[0] > L.halfLen - 34 && p[1] < 22 ? guard : body; // polished stone guard across the lower front
-        return [c.r, c.g, c.b];
+        const t = panelTone(p);
+        return [body.r * t, body.g * t, body.b * t];
       };
 
       const shellInfo = {
@@ -834,6 +883,34 @@
         });
       });
 
+      // Rock guard: tinted shield standing off the front cap, wrapping past the window.
+      (function rockGuard() {
+        const inGuard = (k, i) => {
+          const i2 = (i + 1) % N;
+          const y = (innerRings[k][i][1] + innerRings[k + 1][i][1]) / 2;
+          return SEG[i].startsWith("front") && SEG[i2].startsWith("front") && Math.max(END_ANGLE[i], END_ANGLE[i2]) <= 50 && y > 30 && y < 62;
+        };
+        const tris = [];
+        for (let k = 0; k < K - 1; k++) for (let i = 0; i < N; i++) if (inGuard(k, i)) tris.push(...quadTris("g", k, i));
+        const info = { name: "Rock Guard", mat: "Tinted acrylic shield", desc: "Protects the rectangular front window behind it." };
+        add(new THREE.Mesh(buildGeometry(tris, vertexOf), mat(0x0a0d10, 0.08, 0.4, { transparent: true, opacity: 0.82, side: THREE.DoubleSide })), info);
+        add(new THREE.Mesh(buildGeometry(edgeBand(inGuard, "o", "g"), vertexOf), jambMat), info);
+      })();
+
+      // Stone guard: polished aluminium sheet riveted over the lower front, wrapping the corners.
+      (function stoneGuard() {
+        const inGuard = (k, i) => {
+          const a = innerRings[k][i], b = innerRings[k + 1][(i + 1) % N];
+          return (a[0] + b[0]) / 2 > L.halfLen - 30 && (a[1] + b[1]) / 2 < 20;
+        };
+        const tris = [];
+        for (let k = 0; k < K - 1; k++) for (let i = 0; i < N; i++) if (inGuard(k, i)) tris.push(...quadTris("s", k, i));
+        const info = { name: "Stone Guard", mat: "Polished aluminium sheet", desc: "Protects the lower front cap from road debris." };
+        const polished = mat(0xf2f4f6, 0.08, 1);
+        add(new THREE.Mesh(buildGeometry(tris, vertexOf), polished), info).castShadow = true;
+        add(new THREE.Mesh(buildGeometry(edgeBand(inGuard, "o", "s"), vertexOf), polished), info);
+      })();
+
       // ═══════════════════════════════════════════════════════════════════
       // DOORS
       // ═══════════════════════════════════════════════════════════════════
@@ -852,7 +929,7 @@
         const innerGeo = buildGeometry(shellSkin("i", "entry"), vertexOf);
         outerGeo.translate(-hinge.x, 0, -hinge.z);
         innerGeo.translate(-hinge.x, 0, -hinge.z);
-        const outerMat = mat(0xffffff, 0.3, 0.85, { vertexColors: true, map: skinTex, bumpMap: skinTex, bumpScale: 0.25, side: THREE.DoubleSide });
+        const outerMat = aluminiumSkin({ side: THREE.DoubleSide });
         const innerMat = mat(0xb8bec4, 0.6, 0.3, { side: THREE.DoubleSide });
         const pivot = new THREE.Group();
         pivot.position.copy(hinge);
@@ -885,29 +962,29 @@
         }).position.set((d.x0 + d.x1) / 2, -12, L.halfWid + 7);
       })();
 
-      // Bathroom door: flat panel on the aisle wall, hinged on its rear jamb, swings out into the aisle.
+      // Bathroom door: flat panel on the aisle wall, hinged on the toilet side (front jamb), swings out into the aisle.
       (function bathDoor() {
         const d = L.bathDoor, w = d.x1 - d.x0;
         const pivot = new THREE.Group();
-        pivot.position.set(d.x0, 0, d.z);
+        pivot.position.set(d.x1, 0, d.z);
         scene.add(pivot);
         const doorMat = mat(0xffffff, 0.6, 0.0, { map: laminateTex });
         const panel = new THREE.Mesh(new THREE.BoxGeometry(w - 0.4, d.h, 1), doorMat);
-        panel.position.set(w / 2, d.h / 2, -0.5);
+        panel.position.set(-w / 2, d.h / 2, -0.5);
         const knob = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 8), chromeMat);
-        knob.position.set(w - 2.5, 36, 0.8);
+        knob.position.set(-(w - 2.5), 36, 0.8);
         const innerKnob = knob.clone();
         innerKnob.position.z = -1.8;
         const info = {
           name: "Bathroom Door",
           mat: "Laminate panel",
-          desc: "Swings out into the aisle. Hinge side (rear jamb) read from the floorplan — confirm.",
+          desc: "Hinged on the toilet side; swings out into the aisle.",
           action: "bath"
         };
         add(panel, info, pivot);
         add(knob, info, pivot);
         add(innerKnob, info, pivot);
-        doors.bath = { pivot, angle: 0, target: 0, sign: -1, openRad: (d.openDeg * Math.PI) / 180, mats: [doorMat] };
+        doors.bath = { pivot, angle: 0, target: 0, sign: 1, openRad: (d.openDeg * Math.PI) / 180, mats: [doorMat] };
       })();
 
       // ═══════════════════════════════════════════════════════════════════
@@ -923,7 +1000,12 @@
       }
 
       // Sutherland–Hodgman: clip any polygon against a convex one.
-      function clipConvex(subject, clip) {
+      function clipConvex(subject, clipIn) {
+        // Drop near-duplicate points: a hair-length edge has an arbitrary direction and would clip everything.
+        const clip = clipIn.filter((p, i) => {
+          const q = clipIn[(i + clipIn.length - 1) % clipIn.length];
+          return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-3;
+        });
         const sgn = signedArea(clip) > 0 ? 1 : -1;
         let out = subject;
         for (let i = 0; i < clip.length && out.length; i++) {
@@ -978,6 +1060,23 @@
         const mesh = new THREE.Mesh(geo, material);
         mesh.position.x = x0;
         return add(mesh, info);
+      }
+
+      // Plan outline of the inner skin at height y, pulled in by `inset`.
+      function planAt(y, inset) {
+        const o = -inset;
+        const ring = y <= L.shoulderY ? { y } : { phi: Math.asin(Math.min(1, (y - L.shoulderY) / (L.crownY - L.shoulderY + o))) };
+        return ringPoints(profile(ring, o)).map((p) => [p[0], p[2]]);
+      }
+      // Overhead lockers: 1″ slices, each clipped to the shell at its mid-height and pushed a
+      // little past the liner, so the slice steps hide behind the skin and the lockers hug both
+      // the curved walls and the end caps.
+      function overhead(x0, x1, z0, z1, y0, m, info, y1 = L.crownY, step = 1) {
+        for (let y = y0; y < y1; y += step) {
+          const top = Math.min(y + step, y1);
+          const poly = clipConvex(rect(x0, x1, z0, z1), planAt((y + top) / 2, -0.4));
+          if (poly.length >= 3 && Math.abs(signedArea(poly)) > 1) prismPlan(poly, y, top - y, m, info);
+        }
       }
 
       // Low furniture: clipped to the floor outline (end-cap corners).
@@ -1055,7 +1154,38 @@
       });
       tallBox(-51, -50, -47, -10.5, 4, 72, whiteMat, { name: "Shower Surround", mat: "ABS liner", desc: "" });
       box(1.5, 1.5, 6, chromeMat, -48, 66, -24, { name: "Shower Head", mat: "Chrome", desc: "" });
-      box(1, 1, 36, chromeMat, -23.8, 70, -28.5, { name: "Curtain Rod", mat: "Chrome", desc: "" });
+      const shower = (function showerDoor() {
+        const z0 = -46.5, z1 = -10.6, w = z1 - z0, y0 = 4, y1 = 72;
+        const ribs = canvasTexture((g) => {
+          g.fillStyle = "#f3f4f2";
+          g.fillRect(0, 0, 512, 512);
+          for (let x = 0; x < 512; x += 16) {
+            g.fillStyle = "rgba(120,126,130,0.45)";
+            g.fillRect(x, 0, 2, 512);
+            g.fillStyle = "rgba(255,255,255,0.8)";
+            g.fillRect(x + 3, 0, 2, 512);
+          }
+        }, 1);
+        ribs.repeat.set(4, 1);
+        const info = { name: "Shower Door", mat: "Roll-up tambour (flexible plastic)", desc: "Encloses the shower; rolls aside toward the wall.", action: "shower" };
+        const group = new THREE.Group();
+        group.position.set(-23.7, 0, z0);
+        scene.add(group);
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(0.6, y1 - y0, w), mat(0xffffff, 0.45, 0, { map: ribs, transparent: true, opacity: 0.9 }));
+        panel.position.set(0, (y0 + y1) / 2, w / 2);
+        add(panel, info, group);
+        const pull = add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 10, 0.8), chromeMat), info, group);
+        box(1.6, 3, w + 1, whiteMat, -23.7, y1 + 1.5, (z0 + z1) / 2, info); // top track
+        const state = { t: 0, target: 0 };
+        function update() {
+          const k = 1 - 0.85 * state.t; // rolled up to 15% of its width against the wall
+          panel.scale.z = k;
+          panel.position.z = (w * k) / 2;
+          pull.position.set(0.6, 40, w * k - 0.6);
+        }
+        update();
+        return { state, update };
+      })();
 
       planBox(-23.5, 15.9, -47, -32, 0, 31, woodMat, {
         name: "Lavatory",
@@ -1107,7 +1237,7 @@
         mat: "Solid surface",
         desc: ""
       });
-      tallBox(43, 88, -47, -30, 58, 90, woodMat, { name: "Overhead Locker", mat: "Laminate", desc: "" });
+      overhead(43, 88, -47, -30, 58, woodMat, { name: "Overhead Locker", mat: "Laminate", desc: "" });
 
       // ── Curb side, rear → front ──────────────────────────────────────────────
       tallBox(-66.1, -51.5, 25, 47, 0, 90, woodMat, { name: "Linen Closet", mat: "Laminate cabinet", desc: "" });
@@ -1123,10 +1253,10 @@
       box(22, 0.6, 14, whiteMat, 0, 35.8, 34, { name: "Sink Cover", mat: "Cutting board cover", desc: "" });
       box(24.6, 32, 1, blackMat, 30.6, 17, 23.6, { name: "Range / Oven", mat: "Atwood 3-burner", desc: "" });
       box(24.6, 0.8, 21, blackMat, 30.6, 35.8, 34.5, { name: "Cooktop", mat: "Glass cover", desc: "" });
-      tallBox(-15.3, -4, 24, 47, 46, 60, woodMat, { name: "Microwave Cabinet", mat: "Laminate", desc: "" });
-      box(10, 10, 0.6, mat(0x9aa2a8, 0.2, 0.9), -9.6, 52, 23.7, { name: "Microwave", mat: "Stainless", desc: "" });
+      const microwaveInfo = { name: "Microwave", mat: "Built into the pantry side panel", desc: "Faces the galley counter, leaving the countertop free." };
+      box(0.8, 11, 15, mat(0x9aa2a8, 0.25, 0.9), -14.9, 50.5, 33, microwaveInfo);
       box(22, 3, 12, blackMat, 30.6, 55, 34, { name: "Range Hood", mat: "Vent fan", desc: "" });
-      tallBox(-15.3, L.entryDoor.x0 - 1, 30, 47, 58, 90, woodMat, { name: "Overhead Locker", mat: "Laminate", desc: "" });
+      overhead(-15.3, L.entryDoor.x0 - 1, 30, 47, 58, woodMat, { name: "Overhead Locker", mat: "Laminate", desc: "" });
 
       // ── Front: U-dinette ─────────────────────────────────────────────────────
       const dinetteInfo = {
@@ -1150,8 +1280,11 @@
         base.position.set(102.4, 0.4, 0);
         add(base, { name: "Table Pedestal", mat: "Chrome", desc: "" });
       })();
-      tallBox(88.8, 100, -47, -32, 58, 90, woodMat, { name: "Overhead Locker", mat: "Laminate", desc: "" });
-      tallBox(88.8, 100, 32, 47, 58, 90, woodMat, { name: "Overhead Locker", mat: "Laminate", desc: "" });
+      // U of lockers around the dinette: both sides plus a run across the front cap, above the window.
+      const dinetteLocker = { name: "Overhead Locker", mat: "Laminate", desc: "Wraps the front cap above the dinette." };
+      overhead(88.8, 140, -47, -32, 58, woodMat, dinetteLocker);
+      overhead(88.8, 140, 32, 47, 58, woodMat, dinetteLocker);
+      overhead(112, 140, -32, 32, 58, woodMat, dinetteLocker);
 
       // ── Cabinet fronts, handles and small fittings ───────────────────────────
       // Lowest point of the curved ceiling above an aisle-facing face at |z|, minus a margin.
@@ -1183,8 +1316,9 @@
       fronts("z", 23.5, -1, -15.3, 18, 25, 33, 2);
       fronts("z", 30, -1, -15.3, 43, 58.5, yTop(30), 3, "bottom"); // galley locker
       fronts("z", -30, 1, 43, 88, 58.5, yTop(30), 2, "bottom"); // street locker
-      fronts("z", -32, 1, 88.8, 100, 58.5, yTop(32), 1, "bottom"); // dinette lockers
-      fronts("z", 32, -1, 88.8, 100, 58.5, yTop(32), 1, "bottom");
+      fronts("z", -32, 1, 88.8, 99, 58.5, 63, 1, "bottom"); // dinette lockers
+      fronts("z", 32, -1, 88.8, 99, 58.5, 63, 1, "bottom");
+      fronts("x", 112, -1, -22, 22, 58.5, 63, 2, "bottom");
       fronts("z", -32, 1, -23.5, 15.9, 3, 29, 2, "top"); // vanity
       fronts("x", -54.6, 1, -16, 16, 2, 14, 2, "top"); // bed base
       box(0.8, 8, 0.8, chromeMat, 19.5, 24, -15.2, null); // fridge handles
@@ -1199,8 +1333,8 @@
         k.position.set(x, 29.5, 22.8);
         add(k, null);
       });
-      box(6.5, 7, 0.3, darkGlassMat, -11.2, 52, 23.35, null);
-      box(2.4, 8, 0.3, blackMat, -6.3, 52, 23.35, null);
+      box(0.3, 7.5, 9.5, darkGlassMat, -14.4, 50.5, 31, microwaveInfo);
+      box(0.3, 8.5, 2.6, blackMat, -14.4, 50.5, 38.3, microwaveInfo);
 
       // Faucet behind the sink.
       (function faucet() {
@@ -1317,21 +1451,19 @@
           add(beam, info);
         });
         box(10, 4, 5, frameMat, tip.x + 4, -12, 0, { name: "Coupler", mat: "2-5/16″ ball coupler", desc: "" });
-        const jack = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 28, 12), frameMat);
-        jack.position.set(L.halfLen + 44, -10, 0);
-        add(jack, { name: "Tongue Jack", mat: "Electric jack", desc: "" });
+        const jackInfo = { name: "Electric Tongue Jack", mat: "Powered jack · weather cover", desc: "Front lift jack; its motor and controls sit under the black cover." };
+        const jack = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 26, 12), frameMat);
+        jack.position.set(L.halfLen + 41, -10, 0);
+        add(jack, jackInfo);
+        box(6, 1.5, 6, frameMat, L.halfLen + 41, L.groundY + 0.75, 0, jackInfo);
         const boxMat = mat(0xd5dade, 0.25, 0.9);
         shadowed(box(24, 30, 24, boxMat, L.halfLen + 22, 5.5, 0, {
-          name: "Tongue Box",
-          mat: "Polished aluminium",
-          desc: "Box on the A-frame — propane cover or battery box? Confirm what's inside."
+          name: "Propane Cover",
+          mat: "Decorative polished aluminium",
+          desc: "Encloses the two propane tanks on the A-frame."
         }));
         box(25, 1.5, 25, boxMat, L.halfLen + 22, 21, 0, null);
-        shadowed(box(10, 20, 16, mat(0x1c1d1f, 0.95, 0), L.halfLen + 39, 0.5, 8, {
-          name: "Covered Item",
-          mat: "Weather cover",
-          desc: "Black-covered unit on the tongue (generator? grill?) — confirm."
-        }));
+        shadowed(box(10, 14, 12, mat(0x1c1d1f, 0.95, 0), L.halfLen + 41, 9, 0, jackInfo));
       })();
 
       box(4, 6, 64, frameMat, -L.halfLen - 6, -10, 0, { name: "Rear Bumper", mat: "Steel / storage tube", desc: "" });
@@ -1339,7 +1471,7 @@
 
       // ── Awning (curb side) — extends and retracts ─────────────────────────────
       const awning = (function buildAwning() {
-        const x0 = -104, x1 = 92, y = 68, reach = 96, drop = 9;
+        const x0 = -104, x1 = 75.5, y = 68, reach = 96, drop = 9; // front arm stows between the door and the dinette window
         const wallZ = shellPoint(y, 0, 100)[2] + 2.5;
         const info = { name: "Awning", mat: "Acrylic fabric · aluminium arms", desc: "Curb-side patio awning.", action: "awning" };
         const caseMat = mat(0xcfd4d8, 0.3, 0.9);
@@ -1354,7 +1486,15 @@
         fabricGeo.setIndex([0, 2, 1, 1, 2, 3]);
         const fabric = shadowed(add(new THREE.Mesh(fabricGeo, mat(0x3f4246, 0.95, 0, { side: THREE.DoubleSide })), info));
         const bar = tube(1.6, caseMat);
-        const arms = [x0 + 3, x1 - 3].map((x) => ({ x, mesh: shadowed(add(new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1, 8), caseMat), info)) }));
+        const arms = [x0 + 3, x1 - 3].map((x) => {
+          const pts = [];
+          for (let yy = -2; yy <= y - 3; yy += 3) {
+            const p = shellPoint(yy, x, 100, L.skin + 1.3);
+            pts.push(new THREE.Vector3(x, p[1], p[2]));
+          }
+          const stowed = shadowed(add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.8, 8), caseMat), info));
+          return { x, stowed, mesh: shadowed(add(new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1, 8), caseMat), info)) };
+        });
         const state = { t: 0, target: 0 };
         const up = new THREE.Vector3(0, 1, 0);
         function update() {
@@ -1367,9 +1507,11 @@
           fabricGeo.computeBoundingSphere();
           fabric.visible = bar.visible = out;
           bar.position.set((x0 + x1) / 2, yy, z);
-          arms.forEach(({ x, mesh }) => {
+          arms.forEach(({ x, mesh, stowed }) => {
+            stowed.visible = !out;
+            mesh.visible = out;
             const a = new THREE.Vector3(x, -2, L.halfWid + L.skin + 0.8);
-            const b = out ? new THREE.Vector3(x, yy, z) : new THREE.Vector3(x, y - 3, wallZ);
+            const b = new THREE.Vector3(x, yy, z);
             mesh.position.copy(a).add(b).multiplyScalar(0.5);
             mesh.scale.y = a.distanceTo(b);
             mesh.quaternion.setFromUnitVectors(up, b.clone().sub(a).normalize());
@@ -1546,17 +1688,18 @@
       }
 
       const JUMPS = {
-        dinette: { via: [], pos: [66, -4], look: [132, 34, 4] },
-        galley: { via: [], pos: [12, 8], look: [12, 38, 47] },
-        bath: { via: [[-13, 6]], pos: [-15, -15], look: [16, 26, -30], before: () => setDoor("bath", true) },
+        dinette: { via: [], pos: [66, -4], look: [132, 34, 4], before: () => setDoor("bath", false) },
+        galley: { via: [], pos: [12, 8], look: [12, 38, 47], before: () => setDoor("bath", false) },
+        bath: { via: [], pos: [-15, -15], look: [16, 26, -30], before: () => setDoor("bath", true) },
         bed: { via: [], pos: [-44, 4], look: [-132, 26, 0], before: () => setDoor("bath", false) }
       };
       function jumpTo(name) {
         if (mode !== "inside" || busy) return;
         const j = JUMPS[name];
         j.before && j.before();
-        // Leaving the bath: step back into the aisle first.
-        const via = player.z < -10 && name !== "bath" ? [[-13, 6]] : j.via;
+        // Leaving the bath: step back into the aisle first. Entering it: go round the open door.
+        let via = player.z < -10 && name !== "bath" ? [[-13, 6]] : j.via;
+        if (name === "bath") via = [...aroundBathDoor(player.x, -13), [-13, 4]];
         const frames = via.map(([x, z]) => ({ pos: [x, L.eyeY, z], look: [x + (j.pos[0] - x) * 2, L.eyeY - 6, z + (j.pos[1] - z) * 2 || z - 1], fov: INSIDE_FOV, dur: 700 }));
         frames.push({ pos: [j.pos[0], L.eyeY, j.pos[1]], look: j.look, fov: INSIDE_FOV, dur: 1000 });
         runPath(frames, () => settleInside(j.pos[0], j.pos[1], j.look));
@@ -1591,7 +1734,7 @@
         const list = STATIC_OBSTACLES.slice();
         const d = L.bathDoor;
         if (doors.bath.angle < 0.6) list.push([d.x0, d.x1, -10.5, -9.5]);
-        else list.push([d.x0 - 1, d.x0, d.z, d.z + (d.x1 - d.x0)]); // open: lies across the aisle
+        else list.push([d.x1, d.x1 + 1, d.z, d.z + (d.x1 - d.x0)]); // open: lies across the aisle
         return list;
       }
       function collide(px, pz) {
@@ -1619,12 +1762,22 @@
       // Walking is straight-line, except that the bath is only reachable through its doorway.
       const BATH_DOORWAY = [(L.bathDoor.x0 + L.bathDoor.x1) / 2, L.bathDoor.z + 10];
       const inBath = (x, z) => z < L.bathDoor.z && x > L.bathDoor.x0 && x < 16;
+      // With the bath door open it lies across the aisle at its hinge; step around its free end.
+      const DOOR_LINE = L.bathDoor.x1;
+      const AROUND_DOOR = L.bathDoor.z + (L.bathDoor.x1 - L.bathDoor.x0) + L.playerR + 0.5;
+      function aroundBathDoor(fromX, toX) {
+        if (!doorOpen("bath") || (fromX > DOOR_LINE) === (toX > DOOR_LINE)) return [];
+        const s = fromX > DOOR_LINE ? 1 : -1;
+        return [[DOOR_LINE + s * 4, AROUND_DOOR], [DOOR_LINE - s * 5, AROUND_DOOR]];
+      }
       function walkTo(x, z) {
         const queue = [];
-        if (inBath(x, z) !== inBath(player.x, player.z)) {
-          if (!doorOpen("bath")) setDoor("bath", true);
-          queue.push(BATH_DOORWAY);
-        }
+        const goingIn = inBath(x, z) && !inBath(player.x, player.z);
+        const goingOut = !inBath(x, z) && inBath(player.x, player.z);
+        if ((goingIn || goingOut) && !doorOpen("bath")) setDoor("bath", true);
+        if (goingIn) queue.push(...aroundBathDoor(player.x, BATH_DOORWAY[0]), BATH_DOORWAY);
+        else if (goingOut) queue.push(BATH_DOORWAY, ...aroundBathDoor(BATH_DOORWAY[0], x));
+        else queue.push(...aroundBathDoor(player.x, x));
         queue.push([x, z]);
         player.walkTarget = { queue, stuck: 0 };
       }
@@ -1664,6 +1817,7 @@
         }
         if (info.action === "bath") return doorOpen("bath") ? "▸ CLICK TO CLOSE" : "▸ CLICK TO OPEN";
         if (info.action === "awning") return awning.state.target ? "▸ CLICK TO RETRACT" : "▸ CLICK TO EXTEND";
+        if (info.action === "shower") return shower.state.target ? "▸ CLICK TO CLOSE" : "▸ CLICK TO ROLL OPEN";
         if (info.walk && mode === "inside") return "▸ CLICK TO WALK HERE";
         return "";
       }
@@ -1708,6 +1862,8 @@
           if (!doorOpen("entry")) setDoor("entry", true);
           else if (mode === "outside") enterCabin();
           else exitCabin();
+        } else if (info.action === "shower") {
+          shower.state.target = shower.state.target ? 0 : 1;
         } else if (info.action === "awning") {
           setAwning(!awning.state.target);
         } else if (info.action === "bath") {
@@ -1862,10 +2018,12 @@
           d.angle += (d.target - d.angle) * Math.min(1, dt * (reduceMotion ? 30 : 5));
           d.pivot.rotation.y = d.sign * d.angle;
         }
-        const aw = awning.state;
-        if (Math.abs(aw.target - aw.t) > 0.001) {
-          aw.t += (aw.target - aw.t) * Math.min(1, dt * (reduceMotion ? 30 : 3));
-          awning.update();
+        for (const anim of [awning, shower]) {
+          const st = anim.state;
+          if (Math.abs(st.target - st.t) > 0.001) {
+            st.t += (st.target - st.t) * Math.min(1, dt * (reduceMotion ? 30 : 3));
+            anim.update();
+          }
         }
 
         if (path) {
