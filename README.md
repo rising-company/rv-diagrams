@@ -50,7 +50,8 @@ with a king-bed conversion at the rear and a U-shaped front dinette).
 - Curved aluminium shell with windows, tandem axle, A-frame tongue, propane tanks and rooftop A/C
 - Entry door that swings open, and a camera move that steps you inside
 - First-person cabin: galley, fridge column, corner end table, mid-bath (shower, lavatory, toilet), wardrobes, U-dinette and king bed
-- Bathroom door you can open and walk through
+- Bathroom door (swings out into the aisle) and a roll-up shower door
+- Curb-side awning that extends and retracts; reflective riveted aluminium shell with rock guard and stone guard
 - Roof cutaway view of the whole layout from outside
 
 **Controls:**
