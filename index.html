@@ -191,7 +191,17 @@
       .icon { width: 1.25em; height: 1.25em; fill: none; stroke: currentColor; stroke-width: 1.5px; stroke-linecap: square; stroke-linejoin: miter; vertical-align: -0.25em; }
       .icon * { vector-effect: non-scaling-stroke; }
     </style>
-  </head>
+    <script>
+    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    window.va("beforeSend", function (event) {
+      var url = new URL(event.url);
+      url.search = "";
+      url.hash = "";
+      return Object.assign({}, event, { url: url.href });
+    });
+  </script>
+  <script defer src="/_vercel/insights/script.js"></script>
+</head>
   <body>
     <header>
       <div class="eyebrow">// RV Power Systems</div>
